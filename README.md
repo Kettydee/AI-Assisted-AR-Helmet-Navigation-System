@@ -54,7 +54,7 @@ flowchart TD
         Mic["I2S Microphone"] --> MCU
     end
 
-    subgraph Phone["Companion Mobile App (React Native / Flutter)"]
+    subgraph Phone["HELMATE Mobile App (Flutter)"]
         RoutingEngine["Routing (Google Maps / OSM)"]
         EmergencyService["SOS Dispatch Service"]
         VoiceAgent["Phone Assistant / Dialer"]
@@ -104,7 +104,7 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 
 - **Helmet Firmware (`/firmware`):** C++ written with [PlatformIO](https://platformio.org/) / Arduino Core for ESP32-S3. Manages I2C sensor bus, display framebuffer, BLE GATT server, and hardware UART listener for Banana Pi vision alerts.
 - **Vision AI on Banana Pi BPI-M4 (`/vision-ai`):** Real-time YOLOv8-nano (NCNN/ONNX) pothole detection runner with camera capture, rider lane gating (25%–75%), minimum danger area filtering, and UART alert streaming to ESP32-S3. Includes the full Google Colab training notebook.
-- **Companion Mobile App (`/mobile-app`):** Built with React Native / Flutter. Handles turn-by-turn routing (Google Maps / OpenStreetMap APIs), translates route waypoints into compact BLE binary packets, and handles SOS dispatch.
+- **HELMATE Mobile App (`/mobile-app`):** Flutter MVP with Home, Navigation, Safety, and Settings screens. It translates route maneuvers into compact BLE packets and owns the crash-alert workflow.
 - **AI & Edge Intelligence:**
   - `YOLOv8-nano` on NCNN for ARM NEON edge execution on Banana Pi BPI-M4.
   - `Picovoice Porcupine` for low-latency wake-word and intent recognition.
@@ -133,7 +133,7 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 │   ├── requirements.txt   # Python dependencies
 │   ├── pothole_detection_colab.ipynb # Original Google Colab training notebook
 │   └── README.md          # Banana Pi M4 wiring, setup & systemd autostart guide
-├── mobile-app/            # Companion app specifications & code
+├── mobile-app/            # Flutter companion app, state, protocol & tests
 ├── hardware/              # Hardware docs, BOM & optical diagrams
 │   ├── optics/            # AR combiner optical design & mount specs
 │   └── BOM.md             # Detailed parts list & sourcing

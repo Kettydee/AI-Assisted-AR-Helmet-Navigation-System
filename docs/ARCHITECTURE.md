@@ -9,7 +9,7 @@ This document details the multi-tier hardware, firmware, and cloud architecture 
 ```text
 [ NEO-6M GPS ] ──(NMEA UART)──┐
                               ▼
-[ MPU6050 IMU] ──(I2C)───────► [ ESP32-S3 Firmware ] ──(BLE GATT)──► [ Companion Phone App ]
+[ MPU6050 IMU] ──(I2C)───────► [ ESP32-S3 Firmware ] ──(BLE GATT)──► [ HELMATE Mobile App ]
                               ▲                                                │
 [ BH1750 Lux ] ──(I2C)────────┤                                                ▼
                               ▼                                       [ Google Maps / OSM ]

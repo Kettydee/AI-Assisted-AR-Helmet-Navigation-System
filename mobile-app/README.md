@@ -1,54 +1,76 @@
-# Companion Mobile Application
+# HELMATE
 
-The mobile companion application acts as the "Think + Connect" brain of the system, delegating visual feedback and sensor capture to the ESP32-S3 helmet unit over Bluetooth Low Energy (BLE).
+HELMATE is a focused Flutter MVP with four screens: Home,
+Navigation, Safety, and Settings. It is the phone-side control surface for the
+ESP32-S3 helmet and keeps all detailed interaction off the helmet display.
 
----
+## What is implemented
 
-## 📱 Responsibilities
+- **Home:** helmet link status, simulated live speed, GPS lock state, ride timer,
+  and start/end ride control.
+- **Navigation:** destination entry, route preview, next turn, live distance to
+  the maneuver, and rate-limited BLE packet writes.
+- **Safety:** emergency-contact editing, crash-detection toggle, SOS state, and a
+  safe 10-second countdown simulation that never contacts anyone.
+- **Settings:** speed-warning threshold, pothole alerts, audio alerts, and a BLE
+  device picker.
+- **Protocol:** the firmware-compatible three-byte navigation encoder with unit
+  coverage.
 
-1. **Turn-by-Turn Routing Engine:**
-   - Interfaces with Google Maps Directions API / OpenStreetMap (OSRM).
-   - Reduces each maneuver to `LEFT`, `RIGHT`, `STRAIGHT`, `U-TURN`, or `DESTINATION`.
-   - Serializes only the direction and remaining distance into a compact BLE packet.
-   - Pushes updates to the helmet's BLE navigation characteristic.
+The checked-in `DemoHelmetService` lets the complete UI and protocol flow run in
+an emulator without helmet hardware. It exposes the same interface that a native
+BLE adapter must implement, so replacing it does not affect screen code.
 
-2. **Emergency SOS & Fall Dispatch:**
-   - Subscribes to the helmet's BLE Hazard & Impact characteristic.
-   - If a sustained crash or orientation flip is signaled, the app initiates a 10-second cancel countdown.
-   - If not cancelled, it automatically dispatches an SMS and emergency call with live GPS coordinates to configured emergency contacts.
+## Run locally
 
-3. **Audio Management & Ducking:**
-   - Lowers playback volume of background music when navigation audio prompts or hazard alerts trigger.
-   - Speaks route prompts such as `Turn right in 120 meters` through the phone/helmet audio connection.
-   - Speaks hazard prompts such as `Pothole detected. Go left` using the avoidance direction received from the helmet.
-   - Routes voice calls over Bluetooth Hands-Free Profile (HFP) when the helmet's Push-To-Talk button is pressed.
+Flutter 3.22 or newer (Dart 3.4+) is required.
 
-4. **Crowdsourced Hazard Logging:**
-   - Batches GPS-tagged bump events detected by the helmet IMU and uploads them to the central backend.
+```bash
+cd mobile-app
+flutter create --platforms=android,ios .
+flutter pub get
+flutter run
+```
 
----
+`flutter create` hydrates the generated Android and iOS runner directories; the
+application code, tests, and package definition are already included. Run the
+checks with:
 
-## 📡 BLE Protocol Specification
+```bash
+flutter analyze
+flutter test
+```
 
-- **Service UUID:** `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
-- **Navigation Characteristic (Write/Read):** `beb5483e-36e1-4688-b7f5-ea07361b26a8`
-  - Payload format: `[Direction: 1B][DistanceMeters: 2B, big-endian]`
-  - Direction IDs: `1=LEFT`, `2=RIGHT`, `3=STRAIGHT`, `4=U-TURN`, `5=DESTINATION`
-  - Example: `02 00 78` means `RIGHT`, `120 m`. The ESP32 draws the arrow.
-- **Hazard & SOS Characteristic (Notify):** `1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e`
-  - Payload format: `[EventType: 1B][G-Force: 2B][Lat: 4B][Lon: 4B]`
+## BLE protocol
 
-The reusable OSRM-to-BLE mapping is implemented in
-[`src/navigationProtocol.ts`](src/navigationProtocol.ts). The routing screen
-should recalculate `distanceToManeuverMeters` from the rider's live GPS position
-and write a new packet when the direction changes or the displayed distance
-changes meaningfully (for example, every 10 m).
+| Item | UUID / format |
+| --- | --- |
+| Service | `4fafc201-1fb5-459e-8fcc-c5c9c331914b` |
+| Navigation characteristic | `beb5483e-36e1-4688-b7f5-ea07361b26a8` |
+| Hazard/SOS characteristic | `1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e` |
+| Navigation payload | `[direction: 1B][distance metres: 2B, big-endian]` |
 
-The AR display intentionally receives no words such as `GO LEFT`. It renders a
-large arrow, the compact label (`LEFT`, `RIGHT`, etc.), and the distance.
+Direction IDs are `1=LEFT`, `2=RIGHT`, `3=STRAIGHT`, `4=U-TURN`, and
+`5=DESTINATION`. For example, `02 00 78` means right in 120 metres.
 
-Voice text is generated separately by [`src/voicePrompts.ts`](src/voicePrompts.ts).
-Connect its `SpeechEngine` interface to the app's text-to-speech library. Trigger
-`announceNavigation` when the routing engine emits a spoken maneuver event, not
-on every distance BLE update, so the rider does not hear the same instruction
-repeatedly. Trigger `announcePothole` when a new avoidance alert arrives.
+The controller sends a packet whenever the direction changes or distance changes
+by at least 10 metres. Speech prompts should be triggered by maneuver events, not
+these more frequent display updates.
+
+## Production adapters still required
+
+The MVP deliberately keeps platform effects behind service boundaries. Before a
+hardware road test:
+
+1. Replace `DemoHelmetService` with a BLE adapter that scans for the service UUID,
+   discovers both characteristics, subscribes to hazard notifications, and writes
+   navigation packets.
+2. Feed speed and position from a foreground GPS service and add the Android/iOS
+   permission declarations.
+3. Connect destination search and routing to Google Maps or an OSM provider.
+4. Implement emergency SMS/dialer handoff with explicit user consent and retain
+   the 10-second cancel window.
+5. Connect audio prompts to platform text-to-speech and Bluetooth audio routing.
+
+The previous TypeScript protocol helpers remain in `src/` as migration reference;
+the Flutter implementation used by the app lives under `lib/src/services/`.
