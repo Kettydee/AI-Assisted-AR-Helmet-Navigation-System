@@ -139,8 +139,8 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 
 ## 👥 Contributors
 
-- **S Sanjith**
-- **Rayna Agarwal**
+- [**S Sanjith** (@Sanjith-Jam)](https://github.com/Sanjith-Jam)
+- [**Rayna Agarwal** (@raynaagarwal01-rgb)](https://github.com/raynaagarwal01-rgb)
 - **Maxime Maheiu Jose**
 - **Kavin Ram**
 - **Khirabdi Tanaya Dash**
