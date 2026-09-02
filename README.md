@@ -110,6 +110,14 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
   - `Picovoice Porcupine` for low-latency wake-word and intent recognition.
 - **Backend Service (`/backend`):** Node.js API with spatial database (PostgreSQL/PostGIS) for crowdsourced pothole telemetry.
 
+> **Hardware (as-built prototype):** the working bench prototype runs the compute
+> and vision on a **Banana Pi M4 (Armbian)**, takes positioning + cellular from a
+> **Waveshare SIM7600X** (GNSS + 4G LTE) instead of a wired NEO-6M, and uses an
+> **ESP32-CAM** running the stock `CameraWebServer` sketch as the forward camera
+> (consumed as an MJPEG stream over Wi-Fi). The ESP32-S3 keeps its helmet-side
+> HUD / audio / BLE role. See [`docs/PROGRESS.md`](docs/PROGRESS.md) and
+> [`hardware/wiring/sim7600x.md`](hardware/wiring/sim7600x.md).
+
 ---
 
 ## ⚠️ Key Engineering Challenges & Mitigations
@@ -128,7 +136,8 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 │   ├── src/               # Sensor fusion, BLE server, display & BPI UART logic
 │   └── platformio.ini     # PlatformIO environment configuration
 ├── vision-ai/             # Banana Pi BPI-M4 YOLOv8 edge vision pipeline & Colab notebook
-│   ├── bpi_inference.py   # Real-time multi-threaded edge runner with UART telemetry
+│   ├── bpi_inference.py   # Real-time edge runner; local camera or ESP32-CAM stream + UART telemetry
+│   ├── gps_sim7600x.py    # Waveshare SIM7600X GNSS reader (JSON out, optional UART forward)
 │   ├── train.py           # Training & NCNN/ONNX export script
 │   ├── requirements.txt   # Python dependencies
 │   ├── pothole_detection_colab.ipynb # Original Google Colab training notebook
@@ -136,8 +145,11 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 ├── mobile-app/            # Companion app specifications & code
 ├── hardware/              # Hardware docs, BOM & optical diagrams
 │   ├── optics/            # AR combiner optical design & mount specs
+│   ├── wiring/            # Module wiring & bring-up notes (SIM7600X, …)
 │   └── BOM.md             # Detailed parts list & sourcing
 ├── docs/                  # Architectural diagrams & specifications
+│   ├── ARCHITECTURE.md    # Data-flow & hazard/crash logic
+│   └── PROGRESS.md        # Build progress log (as-built hardware, milestones, next steps)
 ├── LICENSE                # MIT License
 └── README.md              # Project documentation
 ```
