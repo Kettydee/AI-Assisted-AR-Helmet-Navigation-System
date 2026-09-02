@@ -7,7 +7,7 @@ This module integrates real-time forward-facing computer vision into the **AI-As
 ## 🎯 Architecture & Responsibility
 
 While the helmet's **ESP32-S3** manages display rendering, audio ducking, and BLE communication, the **Banana Pi BPI-M4** acts as a dedicated edge-vision coprocessor:
-1. Ingests video frames from a forward-facing helmet-mounted wide-angle camera (USB or MIPI-CSI).
+1. Ingests video frames from a forward-facing helmet-mounted wide-angle camera. On the current prototype this is an **ESP32-CAM** running the stock Arduino `CameraWebServer` sketch, consumed as an MJPEG stream over Wi-Fi (`http://<esp32-cam-ip>:81/stream`); a USB or MIPI-CSI camera on the Pi works too.
 2. Runs lightweight neural network inference using ARM NEON vector instructions via **NCNN**.
 3. Applies **lane gating** (filtering only the rider’s central 50% path) and **minimum defect area** filtering.
 4. Scores the visible `LEFT`, `CENTER`, and `RIGHT` corridors and selects the least-obstructed path.
@@ -92,6 +92,19 @@ python3 bpi_inference.py \
   --threads 4
 ```
 
+### Using the ESP32-CAM Wi-Fi stream instead of a local camera
+Point `--camera` at the ESP32-CAM's MJPEG endpoint. The runner keeps only the
+newest frame and automatically tears down and reopens the capture if the stream
+drops (the ESP32-CAM closes the socket under Wi-Fi congestion):
+```bash
+python3 bpi_inference.py \
+  --model best_ncnn_model \
+  --camera http://192.168.4.1:81/stream \
+  --serial-port /dev/ttyS1 \
+  --headless \
+  --threads 4
+```
+
 ### Production Headless Mode (Helmet Internal Runtime)
 Run in headless mode without X11 display overhead to maximize FPS and reduce power consumption:
 ```bash
@@ -103,6 +116,30 @@ python3 bpi_inference.py \
   --headless \
   --threads 4
 ```
+
+---
+
+## 🛰️ GPS via the Waveshare SIM7600X
+
+The prototype gets position (and 4G connectivity) from a **Waveshare SIM7600X**
+on the Banana Pi rather than a wired NEO-6M on the ESP32. `gps_sim7600x.py`
+powers the GNSS engine and emits line-delimited JSON fixes; see
+[`../hardware/wiring/sim7600x.md`](../hardware/wiring/sim7600x.md) for port
+enumeration and antenna notes.
+
+```bash
+# One-shot sanity check over the AT port (AT+CGPSINFO polling)
+python3 gps_sim7600x.py --mode at --once
+
+# Continuous, reading the dedicated NMEA port and also forwarding compact
+# GPS:<lat>:<lon>:<fix> lines to the ESP32 over UART
+python3 gps_sim7600x.py --mode nmea --serial-out /dev/ttyS1
+```
+
+Default ports are `/dev/ttyUSB2` (AT) and `/dev/ttyUSB1` (NMEA); override with
+`--at-port` / `--nmea-port`. The JSON shape is
+`{"source","fix","lat","lon","utc",...}` so telemetry logging and SOS dispatch
+can consume it directly.
 
 ---
 
