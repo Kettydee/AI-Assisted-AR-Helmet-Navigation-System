@@ -16,6 +16,38 @@ except ImportError:
     serial = None
 
 from ultralytics import YOLO
+from avoidance import choose_avoidance_direction
+
+
+def draw_direction_arrow(frame, direction):
+    """Draw a large direction cue without drawing detection boxes."""
+    h, w, _ = frame.shape
+    center_x = w // 2
+    top = max(70, h // 8)
+    bottom = min(h - 70, top + h // 4)
+    color = (0, 215, 255)
+    thickness = max(4, w // 120)
+
+    if direction == "LEFT":
+        start, end = (center_x + w // 10, bottom), (center_x - w // 10, bottom)
+        cv2.arrowedLine(frame, start, end, color, thickness, tipLength=0.35)
+    elif direction == "RIGHT":
+        start, end = (center_x - w // 10, bottom), (center_x + w // 10, bottom)
+        cv2.arrowedLine(frame, start, end, color, thickness, tipLength=0.35)
+    else:
+        start, end = (center_x, bottom), (center_x, top)
+        cv2.arrowedLine(frame, start, end, color, thickness, tipLength=0.28)
+
+    label_size, _ = cv2.getTextSize(direction, cv2.FONT_HERSHEY_SIMPLEX, 1.1, 3)
+    cv2.putText(
+        frame,
+        direction,
+        (center_x - label_size[0] // 2, bottom + 45),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.1,
+        color,
+        3,
+    )
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Banana Pi M4 Pothole Edge Inference Runner")
@@ -102,6 +134,7 @@ def main():
             hazard_detected = False
             max_hazard_area = 0
             best_hazard_conf = 0.0
+            hazard_boxes = []
 
             for r in results:
                 for box in r.boxes:
@@ -114,18 +147,25 @@ def main():
                     # Lane gating & Area gating
                     if (lane_min_x <= center_x <= lane_max_x) and (area >= args.area_threshold):
                         hazard_detected = True
+                        hazard_boxes.append((x1, y1, x2, y2))
                         if area > max_hazard_area:
                             max_hazard_area = int(area)
                             best_hazard_conf = conf
 
-                        if not args.headless:
-                            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
+            avoidance_direction = None
+            if hazard_detected:
+                avoidance_direction = choose_avoidance_direction(
+                    hazard_boxes, w, h, args.lane_margin
+                )
 
             now = time.time()
             if hazard_detected and (now - last_alert_time > ALERT_COOLDOWN):
                 last_alert_time = now
-                alert_msg = f"POTHOLE_ALERT:{best_hazard_conf:.2f}:{max_hazard_area}\n"
-                print(f"[ALERT] In-lane pothole detected! {alert_msg.strip()}")
+                alert_msg = (
+                    f"POTHOLE_ALERT:{avoidance_direction}:"
+                    f"{best_hazard_conf:.2f}:{max_hazard_area}\n"
+                )
+                print(f"[ALERT] Pothole avoidance: {alert_msg.strip()}")
                 if ser:
                     ser.write(alert_msg.encode("utf-8"))
 
@@ -134,9 +174,12 @@ def main():
                 cv2.line(frame, (lane_min_x, 0), (lane_min_x, h), (0, 255, 0), 2)
                 cv2.line(frame, (lane_max_x, 0), (lane_max_x, h), (0, 255, 0), 2)
                 
-                status_text = "⚠️ POTHOLE AHEAD" if hazard_detected else "PATH CLEAR"
+                status_text = "POTHOLE" if hazard_detected else "PATH CLEAR"
                 status_color = (0, 0, 255) if hazard_detected else (0, 255, 0)
                 cv2.putText(frame, status_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, status_color, 2)
+
+                if avoidance_direction:
+                    draw_direction_arrow(frame, avoidance_direction)
 
                 cv2.imshow("BPI-M4 Pothole Vision", frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):

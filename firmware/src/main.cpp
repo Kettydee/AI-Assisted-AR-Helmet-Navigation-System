@@ -16,12 +16,28 @@ BLECharacteristic* pNavCharacteristic = nullptr;
 BLECharacteristic* pHazardCharacteristic = nullptr;
 
 bool deviceConnected = false;
-String currentTurnPrompt = "SEARCHING...";
-int currentTurnDistance = 0;
+
+enum class NavigationDirection : uint8_t {
+    LEFT = 1,
+    RIGHT = 2,
+    STRAIGHT = 3,
+    U_TURN = 4,
+    DESTINATION = 5,
+};
+
+enum class AvoidanceDirection : uint8_t {
+    CENTER,
+    LEFT,
+    RIGHT,
+};
+
+NavigationDirection currentTurnDirection = NavigationDirection::STRAIGHT;
+uint16_t currentTurnDistance = 0;
 
 // Vision Hazard State (from Banana Pi M4)
 bool visionAlertActive = false;
 unsigned long visionAlertStartTime = 0;
+AvoidanceDirection currentAvoidanceDirection = AvoidanceDirection::CENTER;
 
 // BLE Service UUIDs
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -40,12 +56,99 @@ class ServerCallbacks : public BLEServerCallbacks {
 
 class NavDataCallback : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) override {
-        String rxValue = pCharacteristic->getValue().c_str();
-        if (rxValue.length() > 0) {
-            currentTurnPrompt = rxValue;
+        // Compact packet: [direction: 1 byte][distance metres: 2 bytes, big-endian].
+        // No display wording or icon data needs to be sent by the phone.
+        auto rxValue = pCharacteristic->getValue();
+        if (rxValue.length() != 3) {
+            Serial.println("Ignored invalid navigation packet (expected 3 bytes).");
+            return;
         }
+
+        uint8_t directionId = static_cast<uint8_t>(rxValue[0]);
+        if (directionId < static_cast<uint8_t>(NavigationDirection::LEFT) ||
+            directionId > static_cast<uint8_t>(NavigationDirection::DESTINATION)) {
+            Serial.println("Ignored navigation packet with unknown direction.");
+            return;
+        }
+
+        currentTurnDirection = static_cast<NavigationDirection>(directionId);
+        currentTurnDistance =
+            (static_cast<uint16_t>(static_cast<uint8_t>(rxValue[1])) << 8) |
+            static_cast<uint8_t>(rxValue[2]);
     }
 };
+
+const char* navigationLabel(NavigationDirection direction) {
+    switch (direction) {
+        case NavigationDirection::LEFT: return "LEFT";
+        case NavigationDirection::RIGHT: return "RIGHT";
+        case NavigationDirection::STRAIGHT: return "STRAIGHT";
+        case NavigationDirection::U_TURN: return "U-TURN";
+        case NavigationDirection::DESTINATION: return "DESTINATION";
+    }
+    return "STRAIGHT";
+}
+
+const char* avoidanceLabel(AvoidanceDirection direction) {
+    switch (direction) {
+        case AvoidanceDirection::LEFT: return "LEFT";
+        case AvoidanceDirection::RIGHT: return "RIGHT";
+        case AvoidanceDirection::CENTER: return "CENTER";
+    }
+    return "CENTER";
+}
+
+void drawThickLine(int x1, int y1, int x2, int y2) {
+    display.drawLine(x1, y1, x2, y2, SSD1306_WHITE);
+    display.drawLine(x1 + 1, y1, x2 + 1, y2, SSD1306_WHITE);
+    display.drawLine(x1, y1 + 1, x2, y2 + 1, SSD1306_WHITE);
+}
+
+void drawDirectionArrow(NavigationDirection direction, int x, int y, int size) {
+    int centerX = x + size / 2;
+    int centerY = y + size / 2;
+
+    switch (direction) {
+        case NavigationDirection::LEFT:
+            drawThickLine(centerX, y + size, centerX, centerY);
+            drawThickLine(centerX, centerY, x + size / 3, centerY);
+            display.fillTriangle(x, centerY, x + size / 3, y,
+                                 x + size / 3, y + size, SSD1306_WHITE);
+            break;
+        case NavigationDirection::RIGHT:
+            drawThickLine(centerX, y + size, centerX, centerY);
+            drawThickLine(centerX, centerY, x + size * 2 / 3, centerY);
+            display.fillTriangle(x + size, centerY, x + size * 2 / 3, y,
+                                 x + size * 2 / 3, y + size, SSD1306_WHITE);
+            break;
+        case NavigationDirection::STRAIGHT:
+            drawThickLine(centerX, y + size, centerX, y + size / 3);
+            display.fillTriangle(centerX, y, x, y + size / 3, x + size, y + size / 3, SSD1306_WHITE);
+            break;
+        case NavigationDirection::U_TURN:
+            drawThickLine(x + size * 3 / 4, y + size, x + size * 3 / 4, y + size / 3);
+            drawThickLine(x + size * 3 / 4, y + size / 3, x + size / 3, y + size / 3);
+            drawThickLine(x + size / 3, y + size / 3, x + size / 3, y + size * 2 / 3);
+            display.fillTriangle(x + size / 3, y + size, x, y + size * 2 / 3,
+                                 x + size * 2 / 3, y + size * 2 / 3, SSD1306_WHITE);
+            break;
+        case NavigationDirection::DESTINATION:
+            drawThickLine(x + size / 4, y, x + size / 4, y + size);
+            display.drawRect(x + size / 4, y, size * 3 / 4, size / 2, SSD1306_WHITE);
+            display.fillRect(x + size / 4, y, size * 3 / 8, size / 4, SSD1306_WHITE);
+            display.fillRect(x + size * 5 / 8, y + size / 4, size * 3 / 8, size / 4, SSD1306_WHITE);
+            break;
+    }
+}
+
+void drawCenteredText(const String& text, int y, uint8_t size) {
+    int16_t x1, y1;
+    uint16_t width, height;
+    display.setTextSize(size);
+    display.getTextBounds(text, 0, y, &x1, &y1, &width, &height);
+    display.setCursor((SCREEN_WIDTH - width) / 2, y);
+    display.print(text);
+}
 
 void initDisplay() {
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
@@ -60,39 +163,38 @@ void initDisplay() {
     display.display();
 }
 
-void renderHUD(const String& direction, int distanceMeters) {
+void renderHUD(NavigationDirection direction, uint16_t distanceMeters) {
     display.clearDisplay();
 
-    // Priority Vision Hazard Alert Banner
+    // A pothole warning temporarily takes priority over map navigation.
     if (visionAlertActive) {
-        display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
+        display.drawTriangle(2, 12, 8, 1, 14, 12, SSD1306_WHITE);
         display.setTextSize(1);
-        display.setCursor(16, 8);
-        display.print(F("! ROAD HAZARD !"));
-        display.setTextSize(2);
-        display.setCursor(18, 26);
+        display.setCursor(7, 4);
+        display.print(F("!"));
+        display.setCursor(20, 3);
         display.print(F("POTHOLE"));
-        display.setTextSize(1);
-        display.setCursor(24, 48);
-        display.print(F("SLOW DOWN"));
+
+        NavigationDirection arrowDirection = NavigationDirection::STRAIGHT;
+        if (currentAvoidanceDirection == AvoidanceDirection::LEFT) {
+            arrowDirection = NavigationDirection::LEFT;
+        } else if (currentAvoidanceDirection == AvoidanceDirection::RIGHT) {
+            arrowDirection = NavigationDirection::RIGHT;
+        }
+        drawDirectionArrow(arrowDirection, 49, 16, 30);
+        drawCenteredText(String(avoidanceLabel(currentAvoidanceDirection)), 51, 1);
         display.display();
         return;
     }
-    
-    // Top status bar
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.print(deviceConnected ? F("[BLE CONNECTED]") : F("[BLE SEARCHING]"));
-    
-    // Main turn indicator
-    display.setTextSize(2);
-    display.setCursor(10, 20);
-    display.print(direction);
 
-    // Distance indicator
-    display.setTextSize(1);
-    display.setCursor(10, 48);
-    display.printf("in %d m", distanceMeters);
+    drawDirectionArrow(direction, 50, 1, 28);
+    drawCenteredText(String(navigationLabel(direction)), 33, 1);
+
+    if (direction == NavigationDirection::DESTINATION) {
+        drawCenteredText(String("ARRIVED"), 49, 1);
+    } else {
+        drawCenteredText(String(distanceMeters) + " m", 46, 2);
+    }
     
     display.display();
 }
@@ -145,6 +247,13 @@ void loop() {
         line.trim();
         if (line.startsWith("POTHOLE_ALERT")) {
             Serial.println("Vision Alert from Banana Pi M4: " + line);
+            if (line.startsWith("POTHOLE_ALERT:LEFT:")) {
+                currentAvoidanceDirection = AvoidanceDirection::LEFT;
+            } else if (line.startsWith("POTHOLE_ALERT:RIGHT:")) {
+                currentAvoidanceDirection = AvoidanceDirection::RIGHT;
+            } else {
+                currentAvoidanceDirection = AvoidanceDirection::CENTER;
+            }
             visionAlertActive = true;
             visionAlertStartTime = millis();
             digitalWrite(AUDIO_MUTE_PIN, HIGH); // Auto audio ducking
@@ -158,7 +267,7 @@ void loop() {
     }
 
     // Render HUD navigation overlay
-    renderHUD(currentTurnPrompt, currentTurnDistance);
+    renderHUD(currentTurnDirection, currentTurnDistance);
 
     // Push-To-Talk input check
     if (digitalRead(PUSH_TO_TALK_PIN) == LOW) {

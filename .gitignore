@@ -29,6 +29,11 @@ env/
 *.tflite
 *.onnx
 
+# Locally generated AR HUD demo assets and video tooling
+demo/.deps/
+demo/inputs/
+demo/output/
+
 # Hardware / CAD
 *.kicad_pcb-bak
 *.kicad_prl

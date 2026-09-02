@@ -29,7 +29,7 @@ Inspired by commercial smart helmets like **Jarvish** and **CrossHelmet**, the s
 | Feature | Description |
 | :--- | :--- |
 | **👓 AR Turn-by-Turn Navigation** | Visual arrows and distance indicators projected directly in the rider’s peripheral line of sight via an optical beamsplitter combiner — no glancing down required. |
-| **⚠️ Pothole & Road Hazard Alert** | Tri-axial IMU vertical ($z$-axis) acceleration thresholding coupled with GPS tagging to alert riders and log road hazards in real time. |
+| **⚠️ Pothole & Road Hazard Alert** | Camera detections are converted into a clear `LEFT`, `CENTER`, or `RIGHT` avoidance arrow; IMU/GPS events can also be logged for hazard mapping. |
 | **🚨 Crash & Fall Detection (SOS)** | Detects rapid deceleration and orientation flip; automatically triggers an emergency SMS/call with live GPS coordinates to pre-configured emergency contacts. |
 | **🎧 AI Music Dimming** | Automatic audio ducking that lowers media volume whenever turn prompts, incoming calls, or hazard warnings are announced. |
 | **📞 Hands-Free AI Voice Assistant** | Bluetooth HFP bridge to Google Assistant / Siri triggered by a physical helmet-mounted push-to-talk (PTT) button. |

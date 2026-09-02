@@ -18,6 +18,22 @@ This document details the multi-tier hardware, firmware, and cloud architecture 
                                                                      [ Cloud Pothole DB ]
 ```
 
+### AR navigation packet flow
+
+```text
+Destination → Maps / OSRM route → next maneuver → direction + distance
+            → BLE navigation characteristic → ESP32 → HUD arrow
+```
+
+Only five map directions are supported in the MVP: `LEFT`, `RIGHT`,
+`STRAIGHT`, `U-TURN`, and `DESTINATION`. A navigation BLE payload is exactly
+three bytes: one direction byte followed by a two-byte big-endian distance in
+metres.
+
+When the camera detects a pothole, the Banana Pi separately chooses the clearest
+of `LEFT`, `CENTER`, and `RIGHT`. That warning temporarily takes priority on the
+HUD, then the display returns to the current map maneuver.
+
 ---
 
 ## 🛡️ Hazard & Crash Detection Logic

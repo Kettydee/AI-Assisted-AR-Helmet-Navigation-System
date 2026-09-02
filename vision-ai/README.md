@@ -10,7 +10,8 @@ While the helmet's **ESP32-S3** manages display rendering, audio ducking, and BL
 1. Ingests video frames from a forward-facing helmet-mounted wide-angle camera (USB or MIPI-CSI).
 2. Runs lightweight neural network inference using ARM NEON vector instructions via **NCNN**.
 3. Applies **lane gating** (filtering only the rider’s central 50% path) and **minimum defect area** filtering.
-4. Streams instant hazard warnings over hardware UART serial to the ESP32-S3 to render visual HUD warnings and duck audio volume.
+4. Scores the visible `LEFT`, `CENTER`, and `RIGHT` corridors and selects the least-obstructed path.
+5. Streams the pothole warning and selected direction over UART to the ESP32-S3 to render an avoidance arrow and duck audio volume.
 
 ```text
 [ Wide-Angle Camera ] ──(USB/CSI)──► [ Banana Pi BPI-M4 ]
@@ -26,8 +27,17 @@ While the helmet's **ESP32-S3** manages display rendering, audio ducking, and BL
                           ┌─────────────────┴─────────────────┐
                           ▼                                   ▼
                    [ SSD1306 HUD ]                 [ Audio Ducking Amp ]
-             "⚠️ POTHOLE AHEAD"                     Mutes Media Playback
+             warning + direction arrow               Mutes Media Playback
 ```
+
+UART alerts use `POTHOLE_ALERT:<direction>:<confidence>:<area>`, for example
+`POTHOLE_ALERT:RIGHT:0.87:5420`. The ESP32 converts the direction into an arrow;
+it never needs a bitmap or display sentence from the vision computer.
+
+> [!CAUTION]
+> The direction is based only on visible pothole occupancy. It does not detect
+> traffic beside or behind the rider and must not be treated as confirmation
+> that a lane change is safe.
 
 ---
 
