@@ -102,10 +102,11 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 
 ## 💻 Software Stack
 
-- **Helmet Firmware (`/firmware`):** C++ written with [PlatformIO](https://platformio.org/) / Arduino Core for ESP32-S3. Manages I2C sensor bus, display framebuffer, BLE GATT server, and audio ducking control.
+- **Helmet Firmware (`/firmware`):** C++ written with [PlatformIO](https://platformio.org/) / Arduino Core for ESP32-S3. Manages I2C sensor bus, display framebuffer, BLE GATT server, and hardware UART listener for Banana Pi vision alerts.
+- **Vision AI on Banana Pi BPI-M4 (`/vision-ai`):** Real-time YOLOv8-nano (NCNN/ONNX) pothole detection runner with camera capture, rider lane gating (25%–75%), minimum danger area filtering, and UART alert streaming to ESP32-S3. Includes the full Google Colab training notebook.
 - **Companion Mobile App (`/mobile-app`):** Built with React Native / Flutter. Handles turn-by-turn routing (Google Maps / OpenStreetMap APIs), translates route waypoints into compact BLE binary packets, and handles SOS dispatch.
 - **AI & Edge Intelligence:**
-  - `TFLite` & `YOLOv8-nano` for camera-based road defect segmentation (stretch goal).
+  - `YOLOv8-nano` on NCNN for ARM NEON edge execution on Banana Pi BPI-M4.
   - `Picovoice Porcupine` for low-latency wake-word and intent recognition.
 - **Backend Service (`/backend`):** Node.js API with spatial database (PostgreSQL/PostGIS) for crowdsourced pothole telemetry.
 
@@ -124,8 +125,14 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 ```text
 ├── firmware/              # ESP32-S3 PlatformIO source code
 │   ├── include/           # Header files & pin definitions
-│   ├── src/               # Sensor fusion, BLE server & display logic
+│   ├── src/               # Sensor fusion, BLE server, display & BPI UART logic
 │   └── platformio.ini     # PlatformIO environment configuration
+├── vision-ai/             # Banana Pi BPI-M4 YOLOv8 edge vision pipeline & Colab notebook
+│   ├── bpi_inference.py   # Real-time multi-threaded edge runner with UART telemetry
+│   ├── train.py           # Training & NCNN/ONNX export script
+│   ├── requirements.txt   # Python dependencies
+│   ├── pothole_detection_colab.ipynb # Original Google Colab training notebook
+│   └── README.md          # Banana Pi M4 wiring, setup & systemd autostart guide
 ├── mobile-app/            # Companion app specifications & code
 ├── hardware/              # Hardware docs, BOM & optical diagrams
 │   ├── optics/            # AR combiner optical design & mount specs

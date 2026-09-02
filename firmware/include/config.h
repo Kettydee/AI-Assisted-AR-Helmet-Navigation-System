@@ -25,3 +25,9 @@
 #define POTHOLE_Z_THRESHOLD 2.5f    // in G's
 #define CRASH_DECEL_THRESHOLD 4.0f  // in G's
 #define TILT_ROLL_THRESHOLD 60.0f   // in degrees
+
+// Banana Pi BPI-M4 Vision UART Pins
+#define BPI_UART_RX_PIN 18
+#define BPI_UART_TX_PIN 19
+#define BPI_UART_BAUDRATE 115200
+#define VISION_ALERT_DURATION_MS 3000

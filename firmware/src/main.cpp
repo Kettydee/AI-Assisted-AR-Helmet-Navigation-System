@@ -10,6 +10,7 @@
 
 // Hardware Instances
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+HardwareSerial BpiSerial(2); // Hardware UART for Banana Pi M4
 BLEServer* pServer = nullptr;
 BLECharacteristic* pNavCharacteristic = nullptr;
 BLECharacteristic* pHazardCharacteristic = nullptr;
@@ -17,6 +18,10 @@ BLECharacteristic* pHazardCharacteristic = nullptr;
 bool deviceConnected = false;
 String currentTurnPrompt = "SEARCHING...";
 int currentTurnDistance = 0;
+
+// Vision Hazard State (from Banana Pi M4)
+bool visionAlertActive = false;
+unsigned long visionAlertStartTime = 0;
 
 // BLE Service UUIDs
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -57,6 +62,22 @@ void initDisplay() {
 
 void renderHUD(const String& direction, int distanceMeters) {
     display.clearDisplay();
+
+    // Priority Vision Hazard Alert Banner
+    if (visionAlertActive) {
+        display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
+        display.setTextSize(1);
+        display.setCursor(16, 8);
+        display.print(F("! ROAD HAZARD !"));
+        display.setTextSize(2);
+        display.setCursor(18, 26);
+        display.print(F("POTHOLE"));
+        display.setTextSize(1);
+        display.setCursor(24, 48);
+        display.print(F("SLOW DOWN"));
+        display.display();
+        return;
+    }
     
     // Top status bar
     display.setTextSize(1);
@@ -79,6 +100,9 @@ void renderHUD(const String& direction, int distanceMeters) {
 void setup() {
     Serial.begin(115200);
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+    // Banana Pi BPI-M4 Hardware UART
+    BpiSerial.begin(BPI_UART_BAUDRATE, SERIAL_8N1, BPI_UART_RX_PIN, BPI_UART_TX_PIN);
 
     pinMode(PUSH_TO_TALK_PIN, INPUT_PULLUP);
     pinMode(AUDIO_MUTE_PIN, OUTPUT);
@@ -115,6 +139,24 @@ void setup() {
 }
 
 void loop() {
+    // Read incoming vision alerts from Banana Pi M4 over UART
+    while (BpiSerial.available()) {
+        String line = BpiSerial.readStringUntil('\n');
+        line.trim();
+        if (line.startsWith("POTHOLE_ALERT")) {
+            Serial.println("Vision Alert from Banana Pi M4: " + line);
+            visionAlertActive = true;
+            visionAlertStartTime = millis();
+            digitalWrite(AUDIO_MUTE_PIN, HIGH); // Auto audio ducking
+        }
+    }
+
+    // Auto-clear vision alert after timeout
+    if (visionAlertActive && (millis() - visionAlertStartTime > VISION_ALERT_DURATION_MS)) {
+        visionAlertActive = false;
+        digitalWrite(AUDIO_MUTE_PIN, LOW); // Restore audio
+    }
+
     // Render HUD navigation overlay
     renderHUD(currentTurnPrompt, currentTurnDistance);
 
@@ -124,5 +166,5 @@ void loop() {
         delay(300); // Debounce
     }
 
-    delay(100);
+    delay(50);
 }
