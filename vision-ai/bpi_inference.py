@@ -54,7 +54,8 @@ def parse_args():
     parser.add_argument("--model", type=str, default="best_ncnn_model",
                         help="Path to trained model (NCNN directory, ONNX, or PyTorch weights)")
     parser.add_argument("--camera", type=str, default="0",
-                        help="Camera index or device path (e.g. 0 or /dev/video0)")
+                        help="Camera index, device path, or stream URL "
+                             "(e.g. 0, /dev/video0, or http://192.168.4.1:81/stream for ESP32-CAM)")
     parser.add_argument("--serial-port", type=str, default=None,
                         help="Serial port connected to ESP32-S3 (e.g., /dev/ttyS1, /dev/ttyUSB0)")
     parser.add_argument("--baudrate", type=int, default=115200,
@@ -70,6 +71,38 @@ def parse_args():
     parser.add_argument("--threads", type=int, default=4,
                         help="Number of CPU threads for inference (BPI-M4 has 4 Cortex-A53 cores)")
     return parser.parse_args()
+
+NETWORK_SOURCE_PREFIXES = ("http://", "https://", "rtsp://", "tcp://", "udp://")
+
+
+def is_network_source(camera):
+    return isinstance(camera, str) and camera.lower().startswith(NETWORK_SOURCE_PREFIXES)
+
+
+def open_camera_source(camera):
+    """Open a local camera index/device or a network stream (ESP32-CAM MJPEG).
+
+    Returns an opened cv2.VideoCapture, or None if it could not be opened.
+    """
+    if is_network_source(camera):
+        cap = cv2.VideoCapture(camera)
+        # Keep only the newest frame so detections track the live road, not a
+        # backlog that builds up when inference is slower than the stream.
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except AttributeError:
+            pass
+    else:
+        source = int(camera) if str(camera).isdigit() else camera
+        cap = cv2.VideoCapture(source)
+        if cap.isOpened():
+            # Only meaningful for local capture devices; a fixed MJPEG stream
+            # ignores these and setting them can stall some backends.
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    return cap if cap.isOpened() else None
+
 
 def init_serial(port, baudrate):
     if not port or serial is None:
@@ -94,17 +127,13 @@ def main():
     print(f"[INFO] Loading model from: {args.model}")
     model = YOLO(args.model, task="detect")
 
-    # Camera resolution & device
-    cam_source = int(args.camera) if args.camera.isdigit() else args.camera
-    print(f"[INFO] Opening camera source: {cam_source}")
-    cap = cv2.VideoCapture(cam_source)
-    if not cap.isOpened():
-        print(f"[FATAL] Unable to open camera: {cam_source}")
+    # Camera: local index/device path, or an ESP32-CAM style http/rtsp stream.
+    network_source = is_network_source(args.camera)
+    print(f"[INFO] Opening camera source: {args.camera}")
+    cap = open_camera_source(args.camera)
+    if cap is None:
+        print(f"[FATAL] Unable to open camera: {args.camera}")
         sys.exit(1)
-
-    # Set frame dimensions for fast capture
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     ser = init_serial(args.serial_port, args.baudrate)
 
@@ -115,13 +144,34 @@ def main():
 
     print("[INFO] Banana Pi M4 Pothole Detection Service running. Press Ctrl+C to terminate.")
 
+    empty_reads = 0
+    reconnect_delay = 0.5
+
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("[WARN] Empty frame captured from camera.")
-                time.sleep(0.01)
+                empty_reads += 1
+                if network_source and empty_reads >= 10:
+                    # The ESP32-CAM drops the TCP stream under load / Wi-Fi
+                    # dropout; tear the capture down and dial back in.
+                    print(f"[WARN] stream reconnecting (waited {reconnect_delay:.1f}s)")
+                    cap.release()
+                    time.sleep(reconnect_delay)
+                    reconnect_delay = min(reconnect_delay * 2, 3.0)
+                    reopened = open_camera_source(args.camera)
+                    if reopened is not None:
+                        cap = reopened
+                        empty_reads = 0
+                        reconnect_delay = 0.5
+                else:
+                    if not network_source:
+                        print("[WARN] Empty frame captured from camera.")
+                    time.sleep(0.01)
                 continue
+
+            empty_reads = 0
+            reconnect_delay = 0.5
 
             frame_count += 1
             h, w, _ = frame.shape

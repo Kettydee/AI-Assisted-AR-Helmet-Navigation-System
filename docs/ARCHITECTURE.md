@@ -18,6 +18,28 @@ This document details the multi-tier hardware, firmware, and cloud architecture 
                                                                      [ Cloud Pothole DB ]
 ```
 
+### As-built variant (current prototype)
+
+The bench prototype moves compute to a Banana Pi M4 and changes two sources; the
+downstream HUD / BLE / cloud paths are unchanged. See
+[`PROGRESS.md`](PROGRESS.md).
+
+```text
+[ ESP32-CAM (CameraWebServer) ] ──(Wi-Fi MJPEG http://<ip>:81/stream)──┐
+                                                                       ▼
+[ Waveshare SIM7600X ] ──(USB CDC: NMEA / AT+CGPSINFO)──► [ Banana Pi M4 (Armbian) ]
+        │                                                        │  YOLOv8-nano (NCNN)
+        └──(4G LTE)──► cloud / routing (optional)                │  gps_sim7600x.py
+                                                                 ▼
+                                              (UART 115200: POTHOLE_ALERT:… / GPS:…)
+                                                                 ▼
+                                                     [ ESP32-S3 Helmet MCU ] ──► SSD1306 HUD + audio duck + BLE
+```
+
+The SIM7600X supplies the GPS fix that the original design expected from a
+NEO-6M on the ESP32; `gps_sim7600x.py` can forward compact `GPS:<lat>:<lon>:<fix>`
+lines to the ESP32 over the same UART convention as the pothole alerts.
+
 ### AR navigation packet flow
 
 ```text
