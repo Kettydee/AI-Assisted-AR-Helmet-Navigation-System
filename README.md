@@ -160,8 +160,8 @@ Costs reflect Indian hobbyist-market component pricing for a single prototype un
 
 - [**S Sanjith** (@Sanjith-Jam)](https://github.com/Sanjith-Jam)
 - [**Rayna Agarwal** (@raynaagarwal01-rgb)](https://github.com/raynaagarwal01-rgb)
-- **Maxime Maheiu Jose**
+- [**Maxime Mahieu Jose** (@MaximeMahieu)](https://github.com/MaximeMahieu)
 - **Kavin Ram**
-- **Khirabdi Tanaya Dash**
+- [**Khirabdi Tanaya Dash** (@Kettydee)](https://github.com/Kettydee)
 
 *Innovative Design Project*

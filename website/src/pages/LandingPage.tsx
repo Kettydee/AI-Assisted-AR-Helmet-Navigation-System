@@ -606,6 +606,7 @@ export const LandingPage: React.FC = () => {
                 { handle: '@Kettydee', url: 'https://github.com/Kettydee' },
                 { handle: '@Sanjith-Jam', url: 'https://github.com/Sanjith-Jam' },
                 { handle: '@raynaagarwal01-rgb', url: 'https://github.com/raynaagarwal01-rgb' },
+                { handle: '@MaximeMahieu', url: 'https://github.com/MaximeMahieu' },
               ].map((member) => (
                 <a
                   key={member.handle}

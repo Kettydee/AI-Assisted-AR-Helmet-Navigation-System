@@ -71,5 +71,5 @@ node with the ESP32 kept for the helmet-side HUD/audio/BLE role:
 | S Sanjith (@Sanjith-Jam) | — |
 | Rayna Agarwal (@raynaagarwal01-rgb) | Hardware bring-up (Armbian, ESP32-CAM, SIM7600X GPS); SIM7600X GNSS reader + ESP32-CAM stream integration; companion app protocol (`navigationProtocol.ts`, `voicePrompts.ts`); `avoidance.py` corridor picker + tests; HUD arrow rendering; demo tooling |
 | Khirabdi Tanaya Dash (@Kettydee) | Project scaffold, docs, BOM, optics; Banana Pi YOLOv8-nano vision pipeline and NCNN/ONNX export; ESP32 UART hazard-alert path |
-| Maxime Maheiu Jose | — |
+| Maxime Mahieu Jose (@MaximeMahieu) | — |
 | Kavin Ram | — |
