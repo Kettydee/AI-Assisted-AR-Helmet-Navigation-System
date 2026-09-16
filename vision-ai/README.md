@@ -2,6 +2,9 @@
 
 This module integrates real-time forward-facing computer vision into the **AI-Assisted AR Helmet Navigation System**, leveraging a **Banana Pi BPI-M4** Single Board Computer (SBC) running an optimized **YOLOv8-nano (NCNN / ONNX)** model.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing)
+> **Interactive Training & Simulation Notebook:** [Open in Google Colab](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing) | [Local Notebook File (`pothole_detection_colab.ipynb`)](pothole_detection_colab.ipynb)
+
 ---
 
 ## 🎯 Architecture & Responsibility
