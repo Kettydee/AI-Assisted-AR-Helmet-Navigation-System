@@ -8,6 +8,10 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing)
 [![Status: Prototyping](https://img.shields.io/badge/Status-Active%20Prototyping-brightgreen.svg)]()
 
+> 🌟 **Branch: `ml-pothole-training`**  
+> This branch is dedicated to the **Pothole Detection ML pipeline**: training notebooks, edge model exports (NCNN/ONNX), and Banana Pi BPI-M4 real-time inference.  
+> 👉 **See the complete guide in [POTHOLE_TRAINING.md](POTHOLE_TRAINING.md)** or open the [Interactive Google Colab Notebook](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing).
+
 ---
 
 ## 📌 Project Overview
