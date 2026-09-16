@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hardware: ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red.svg)](https://www.espressif.com/)
 [![Firmware: PlatformIO](https://img.shields.io/badge/Firmware-PlatformIO%2FArduino-orange.svg)](https://platformio.org/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing)
 [![Status: Prototyping](https://img.shields.io/badge/Status-Active%20Prototyping-brightgreen.svg)]()
 
 ---
