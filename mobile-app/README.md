@@ -34,10 +34,30 @@ run it** — Expo Go only bundles Expo's own native modules. You need a
 development build:
 
 ```bash
-npx expo run:android   # or: npx expo run:ios (needs a Mac)
-# or, to build in the cloud without local Xcode/Android Studio:
-npx eas-cli@latest build --profile development
+npx expo run:android   # or: npx expo run:ios (needs a Mac + Xcode)
 ```
+
+Neither of those works without a local Android SDK or Xcode. If you don't
+have either installed, build in the cloud instead — `eas.json` in this repo
+already has profiles set up for it:
+
+```bash
+npm install -g eas-cli
+eas login                              # free Expo account
+eas build --profile preview --platform android   # standalone APK, no dev server needed
+```
+
+`eas build` prints a link when it's done; open it on your Android phone to
+download and install the APK directly (no Play Store step). Use
+`--profile development` instead of `preview` if you want a dev-client build
+with live reload while you keep iterating on the code (needs `npm start`
+running alongside it); `preview` is the one to reach for if you just want to
+open the app and look at it.
+
+Either way, without real ESP32-S3 helmet firmware nearby and broadcasting
+over BLE, the **Scan** screen won't find a device to connect to — you'll see
+the UI (scan list, settings, test panel) but "Connect" has nothing to pair
+with yet.
 
 `android`/`ios` folders don't exist in this repo and shouldn't be hand-edited
 if they appear — Expo generates them (Continuous Native Generation) from
