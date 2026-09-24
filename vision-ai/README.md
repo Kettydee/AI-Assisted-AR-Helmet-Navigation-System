@@ -115,10 +115,16 @@ python3 bpi_inference.py \
   --model best_ncnn_model \
   --camera /dev/video0 \
   --serial-port /dev/ttyS1 \
-  --conf 0.50 \
   --headless \
   --threads 4
 ```
+
+`--conf` is optional. If a `model_metadata.json` sits next to `--model` (written
+by `train.py`'s post-training confidence calibration — see
+[`../POTHOLE_TRAINING.md`](../POTHOLE_TRAINING.md)), its calibrated threshold is
+used automatically; pass `--conf` explicitly to override it. A hazard also has
+to reappear across `--consensus-hits` of the last `--consensus-frames` frames
+(default `2` of `3`) before an alert fires, to reject single-frame flicker.
 
 ---
 

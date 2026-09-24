@@ -52,3 +52,17 @@ export function announcePothole(
 ): void | Promise<void> {
   return speech.speak(potholeVoicePrompt(direction));
 }
+
+export function incomingCallVoicePrompt(callerName: string): string {
+  const name = callerName.trim();
+  return name
+    ? `Incoming call from ${name}. Tap the helmet button to accept, or hold it to decline.`
+    : "Incoming call. Tap the helmet button to accept, or hold it to decline.";
+}
+
+export function announceIncomingCall(
+  speech: SpeechEngine,
+  callerName: string,
+): void | Promise<void> {
+  return speech.speak(incomingCallVoicePrompt(callerName));
+}

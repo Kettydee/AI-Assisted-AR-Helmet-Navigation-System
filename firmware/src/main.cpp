@@ -14,6 +14,8 @@ HardwareSerial BpiSerial(2); // Hardware UART for Banana Pi M4
 BLEServer* pServer = nullptr;
 BLECharacteristic* pNavCharacteristic = nullptr;
 BLECharacteristic* pHazardCharacteristic = nullptr;
+BLECharacteristic* pCallCharacteristic = nullptr;
+BLECharacteristic* pCallActionCharacteristic = nullptr;
 
 bool deviceConnected = false;
 
@@ -31,6 +33,17 @@ enum class AvoidanceDirection : uint8_t {
     RIGHT,
 };
 
+// Mirrors mobile-app/src/callAlertProtocol.ts's CallEventType / CallAction.
+enum class CallEventType : uint8_t {
+    RINGING = 1,
+    ENDED = 2,
+};
+
+enum class CallAction : uint8_t {
+    ACCEPT = 1,
+    DECLINE = 2,
+};
+
 NavigationDirection currentTurnDirection = NavigationDirection::STRAIGHT;
 uint16_t currentTurnDistance = 0;
 
@@ -45,10 +58,24 @@ float gpsLatitude = 0.0f;
 float gpsLongitude = 0.0f;
 unsigned long gpsLastFixTime = 0;
 
+// Incoming Call State (phone -> ESP32 over BLE)
+bool callAlertActive = false;
+unsigned long callAlertStartTime = 0;
+char callerName[MAX_CALLER_NAME_LEN + 1] = {0};
+
+// Push-To-Talk press tracking (edge-triggered, non-blocking, debounced)
+bool pttPressed = false;
+unsigned long pttPressStartTime = 0;
+unsigned long pttLastEdgeTime = 0;
+
 // BLE Service UUIDs
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define NAV_CHAR_UUID       "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define HAZARD_CHAR_UUID    "1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e"
+#define SERVICE_UUID          "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define NAV_CHAR_UUID         "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define HAZARD_CHAR_UUID      "1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e"
+// Phone -> ESP32 write: [EventType: 1B][NameLength: 1B][Name: up to MAX_CALLER_NAME_LEN ASCII bytes]
+#define CALL_CHAR_UUID        "77c1bfdd-ed70-4894-b5c5-7e973c7793ec"
+// ESP32 -> phone notify: [Action: 1B], sent when the rider accepts/declines via PTT
+#define CALL_ACTION_CHAR_UUID "1f221721-edb9-4bd8-b18b-df997197e3d0"
 
 class ServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) override {
@@ -83,6 +110,44 @@ class NavDataCallback : public BLECharacteristicCallbacks {
             static_cast<uint8_t>(rxValue[2]);
     }
 };
+
+class CallDataCallback : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pCharacteristic) override {
+        // [EventType: 1B][NameLength: 1B][Name: up to MAX_CALLER_NAME_LEN ASCII bytes]
+        auto rxValue = pCharacteristic->getValue();
+        if (rxValue.length() < 2) {
+            Serial.println("Ignored invalid call packet (expected at least 2 bytes).");
+            return;
+        }
+
+        uint8_t eventType = static_cast<uint8_t>(rxValue[0]);
+        uint8_t nameLen = static_cast<uint8_t>(rxValue[1]);
+        size_t available = rxValue.length() - 2;
+        // Plain clamping (not std::min/Arduino's min() macro, which only takes 2 args).
+        size_t copyLen = nameLen;
+        if (copyLen > available) copyLen = available;
+        if (copyLen > static_cast<size_t>(MAX_CALLER_NAME_LEN)) copyLen = MAX_CALLER_NAME_LEN;
+
+        if (eventType == static_cast<uint8_t>(CallEventType::RINGING)) {
+            for (size_t i = 0; i < copyLen; i++) {
+                callerName[i] = static_cast<char>(rxValue[2 + i]);
+            }
+            callerName[copyLen] = '\0';
+            callAlertActive = true;
+            callAlertStartTime = millis();
+            Serial.println("Incoming call: " + String(callerName));
+        } else {
+            // ENDED (or anything else): the phone is telling us to clear the alert.
+            callAlertActive = false;
+        }
+    }
+};
+
+void sendCallAction(CallAction action) {
+    uint8_t payload[1] = {static_cast<uint8_t>(action)};
+    pCallActionCharacteristic->setValue(payload, 1);
+    pCallActionCharacteristic->notify();
+}
 
 const char* navigationLabel(NavigationDirection direction) {
     switch (direction) {
@@ -215,6 +280,17 @@ void renderHUD(NavigationDirection direction, uint16_t distanceMeters) {
         return;
     }
 
+    // An incoming call is lower priority than a pothole warning, but still
+    // takes over the map view until the rider accepts/declines or it ends.
+    if (callAlertActive) {
+        drawCenteredText(String("INCOMING CALL"), 2, 1);
+        drawCenteredText(String(callerName[0] != '\0' ? callerName : "Unknown"), 22, 1);
+        drawCenteredText(String("TAP=ACCEPT"), 42, 1);
+        drawCenteredText(String("HOLD=DECLINE"), 53, 1);
+        display.display();
+        return;
+    }
+
     drawDirectionArrow(direction, 50, 1, 28);
     drawCenteredText(String(navigationLabel(direction)), 33, 1);
 
@@ -259,6 +335,18 @@ void setup() {
     );
     pHazardCharacteristic->addDescriptor(new BLE2902());
 
+    pCallCharacteristic = pService->createCharacteristic(
+        CALL_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE
+    );
+    pCallCharacteristic->setCallbacks(new CallDataCallback());
+
+    pCallActionCharacteristic = pService->createCharacteristic(
+        CALL_ACTION_CHAR_UUID,
+        BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pCallActionCharacteristic->addDescriptor(new BLE2902());
+
     pService->start();
     BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
@@ -284,7 +372,6 @@ void loop() {
             }
             visionAlertActive = true;
             visionAlertStartTime = millis();
-            digitalWrite(AUDIO_MUTE_PIN, HIGH); // Auto audio ducking
         } else if (line.startsWith("GPS:")) {
             float lat, lon;
             bool fix;
@@ -300,7 +387,6 @@ void loop() {
     // Auto-clear vision alert after timeout
     if (visionAlertActive && (millis() - visionAlertStartTime > VISION_ALERT_DURATION_MS)) {
         visionAlertActive = false;
-        digitalWrite(AUDIO_MUTE_PIN, LOW); // Restore audio
     }
 
     // Drop a stale GPS fix so the HUD indicator reflects a lost signal
@@ -308,13 +394,40 @@ void loop() {
         gpsFixValid = false;
     }
 
+    // Safety net if the phone's ENDED write never arrives (e.g. BLE dropped).
+    if (callAlertActive && (millis() - callAlertStartTime > CALL_ALERT_TIMEOUT_MS)) {
+        callAlertActive = false;
+    }
+
+    // Both the pothole and call alerts want the same mute pin; compute the
+    // combined state once so clearing one alert can't un-mute over the other.
+    digitalWrite(AUDIO_MUTE_PIN, (visionAlertActive || callAlertActive) ? HIGH : LOW);
+
     // Render HUD navigation overlay
     renderHUD(currentTurnDirection, currentTurnDistance);
 
-    // Push-To-Talk input check
-    if (digitalRead(PUSH_TO_TALK_PIN) == LOW) {
-        Serial.println("PTT Pressed: Activating phone voice assistant");
-        delay(300); // Debounce
+    // Push-To-Talk: debounced, edge-triggered, non-blocking (a blocking
+    // delay() here would risk dropping bytes arriving on BpiSerial).
+    // Outside a call, the press edge fires the voice-assistant trigger
+    // (once per press, unlike the old code's repeat-while-held). During a
+    // call, only the release edge matters, since accept vs. decline needs
+    // the full press duration: short = accept, long = decline.
+    bool pttCurrentlyLow = (digitalRead(PUSH_TO_TALK_PIN) == LOW);
+    unsigned long nowMs = millis();
+    if (pttCurrentlyLow != pttPressed && (nowMs - pttLastEdgeTime) >= PTT_DEBOUNCE_MS) {
+        pttLastEdgeTime = nowMs;
+        pttPressed = pttCurrentlyLow;
+
+        if (pttPressed) {
+            pttPressStartTime = nowMs;
+            if (!callAlertActive) {
+                Serial.println("PTT Pressed: Activating phone voice assistant");
+            }
+        } else if (callAlertActive) {
+            bool isLongPress = (nowMs - pttPressStartTime) >= PTT_LONG_PRESS_MS;
+            sendCallAction(isLongPress ? CallAction::DECLINE : CallAction::ACCEPT);
+            callAlertActive = false;
+        }
     }
 
     delay(50);
