@@ -22,6 +22,73 @@ node with the ESP32 kept for the helmet-side HUD/audio/BLE role:
 
 ## Milestones
 
+### 2026-09-24 — mobile-app becomes a real Expo/React Native app
+
+`mobile-app/` was pure protocol logic with no app to run it in. It's now a
+scaffolded Expo SDK 57 app (`npx create-expo-app`, current template - the
+Expo/RN/TS versions here are newer than any training data, which is exactly
+why the scaffolding tool generated them rather than being hand-written) with
+a real `react-native-ble-plx` connection wired to the exact protocol already
+built and tested:
+
+- [x] `src/ble/HelmetConnection.ts` - scans (filtered to the helmet's
+      SERVICE_UUID), connects, discovers characteristics, and both writes
+      (nav, call-alert) and subscribes (hazard, call-action) using the
+      existing `src/protocol/*` encode/decode functions. `src/ble/base64.ts`
+      is a small dependency-free codec (react-native-ble-plx exchanges
+      characteristic values as base64; Hermes doesn't reliably provide
+      btoa/atob).
+- [x] `src/hooks/`: `useHelmetConnection` (BLE context), `useCallRelay`
+      (native call state <-> the helmet's call characteristics),
+      `useCrashAlert` (the counting -> dispatch state machine below),
+      `useSpeech` (expo-speech, implementing the existing `SpeechEngine`
+      interface).
+- [x] `src/components/CrashOverlay.tsx` - always mounted at the app root
+      (not a routed screen, so it can interrupt any screen and can't be
+      navigated away from mid-countdown), mirrors the firmware's 10s
+      countdown, then - since the firmware stops listening for a PTT cancel
+      once its own countdown elapses (see main.cpp) - switches to a
+      "dispatch" screen with one-tap Call/Text per saved contact rather
+      than waiting on a `SOS_CANCELLED` that won't arrive.
+- [x] `src/sos/`: local (AsyncStorage, unsynced) emergency contacts, and
+      `Linking`-based call/text dispatch - real silent auto-dispatch isn't
+      something a normal app can do on either platform without special
+      carrier permissions, so this is the realistic "one tap for whoever's
+      holding the phone" version.
+- [x] `src/telephony/CallObserver.ts` is an honest stub, not fake native
+      code: detecting a ringing call and answering/declining one both need
+      a real native module (Android's telephony APIs increasingly expect
+      default-dialer status; iOS needs CallKit) and on-device testing
+      neither of which this sandbox can do. It defines the exact interface
+      `useCallRelay` is built against, with a console.warn default, so
+      nothing pretends to work that doesn't.
+- [x] Screens (`src/app/`, Expo Router): `index` (status), `scan` (BLE
+      device list), `test-panel` (send raw nav packets / view the last
+      hazard event - explicitly not real turn-by-turn nav, there's no
+      routing engine here), `settings` (local SOS contacts).
+- [x] `docs.expo.dev` is blocked by this sandbox's network policy, and
+      `npx expo install`/`expo-doctor`'s React Native Directory check both
+      failed the same way (need network this sandbox doesn't have) - so API
+      correctness was verified a different, arguably more reliable way:
+      reading the actual installed packages' `.d.ts` files directly out of
+      `node_modules` for the exact versions in use (confirmed
+      `expo-speech`'s `speak()`/`stop()`/`isSpeakingAsync()` signatures and
+      `react-native-ble-plx`'s `BleManager`/`Device` API and bundled Expo
+      config plugin this way) rather than trusting training data older than
+      this SDK.
+- [x] Split every pure-logic file (base64, contact validation, crash
+      message formatting) from anything that imports `react-native`/
+      `expo-*`/AsyncStorage, so `npm test` (Node's test runner, no RN
+      runtime) can keep covering it the same way `src/protocol/*` already
+      was - 44 tests, all passing. `npm run typecheck` passes clean across
+      the *entire* app including the RN/JSX screens, and `npx expo-doctor`
+      passes 19/21 checks (the 2 failures are the same network block, not
+      project issues).
+- [x] Nothing here has run on a device, an emulator, or against a real
+      helmet - Expo Go can't run this app at all (react-native-ble-plx is a
+      native module), and this sandbox has no way to build/run a
+      development build either. See mobile-app/README.md's Next section.
+
 ### 2026-09-24 — Small fixes: stale banner, schema, serial reconnect
 
 - [x] Root `README.md`'s "🌟 Branch: `ml-pothole-training`" banner was stale

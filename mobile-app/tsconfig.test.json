@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "outDir": "dist-test",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/protocol/**/*.ts",
+    "src/ble/base64.ts",
+    "src/ble/base64.test.ts",
+    "src/sos/contactValidation.ts",
+    "src/sos/contactValidation.test.ts",
+    "src/sos/crashMessage.ts",
+    "src/sos/crashMessage.test.ts"
+  ]
+}
