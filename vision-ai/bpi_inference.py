@@ -186,6 +186,8 @@ def main():
         sys.exit(1)
 
     ser = init_serial(args.serial_port, args.baudrate)
+    last_serial_reconnect_attempt = time.time()
+    SERIAL_RECONNECT_INTERVAL = 3.0  # seconds between reconnect attempts
 
     last_alert_time = 0
     ALERT_COOLDOWN = 0.5  # seconds between consecutive serial alert frames
@@ -273,7 +275,22 @@ def main():
                 )
                 print(f"[ALERT] Pothole avoidance: {alert_msg.strip()}")
                 if ser:
-                    ser.write(alert_msg.encode("utf-8"))
+                    try:
+                        ser.write(alert_msg.encode("utf-8"))
+                    except Exception as exc:
+                        # USB-serial adapters disappear on unplug/replug; drop the
+                        # handle so the next alert attempt (throttled below) retries
+                        # the connection instead of raising on every subsequent write.
+                        print(f"[WARN] Lost ESP32 serial connection ({exc}); will retry reconnecting.")
+                        try:
+                            ser.close()
+                        except Exception:
+                            pass
+                        ser = None
+                        last_serial_reconnect_attempt = now
+                elif args.serial_port and (now - last_serial_reconnect_attempt > SERIAL_RECONNECT_INTERVAL):
+                    last_serial_reconnect_attempt = now
+                    ser = init_serial(args.serial_port, args.baudrate)
 
             if not args.headless:
                 # Draw lane guides

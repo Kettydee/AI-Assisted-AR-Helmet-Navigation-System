@@ -1,0 +1,15 @@
+{
+  "name": "mobile-app",
+  "private": true,
+  "version": "0.0.0",
+  "description": "BLE protocol + voice-prompt logic shared by the AR helmet's companion app. No app scaffold yet - see docs/PROGRESS.md.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "pretest": "tsc",
+    "test": "node --test 'dist/**/*.test.js'"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~6.0.2"
+  }
+}

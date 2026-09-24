@@ -18,6 +18,7 @@ ios/build
 .dart_tool/
 .packages
 build/
+dist/
 
 # Python / ML artifacts
 __pycache__/

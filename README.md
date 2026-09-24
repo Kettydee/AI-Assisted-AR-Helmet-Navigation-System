@@ -5,11 +5,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hardware: ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red.svg)](https://www.espressif.com/)
 [![Firmware: PlatformIO](https://img.shields.io/badge/Firmware-PlatformIO%2FArduino-orange.svg)](https://platformio.org/)
+[![CI](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/actions/workflows/ci.yml)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing)
 [![Status: Prototyping](https://img.shields.io/badge/Status-Active%20Prototyping-brightgreen.svg)]()
 
-> 🌟 **Branch: `ml-pothole-training`**  
-> This branch is dedicated to the **Pothole Detection ML pipeline**: training notebooks, edge model exports (NCNN/ONNX), and Banana Pi BPI-M4 real-time inference.  
+> 🕳️ **Pothole Detection ML pipeline:** training notebooks, edge model exports (NCNN/ONNX), and Banana Pi BPI-M4 real-time inference now live alongside the rest of this repo.
 > 👉 **See the complete guide in [POTHOLE_TRAINING.md](POTHOLE_TRAINING.md)** or open the [Interactive Google Colab Notebook](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing).
 
 ---
