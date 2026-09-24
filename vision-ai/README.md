@@ -126,6 +126,11 @@ used automatically; pass `--conf` explicitly to override it. A hazard also has
 to reappear across `--consensus-hits` of the last `--consensus-frames` frames
 (default `2` of `3`) before an alert fires, to reject single-frame flicker.
 
+If the ESP32-S3's USB-serial adapter is unplugged/replugged mid-run, `--serial-port`
+reconnects the same way the ESP32-CAM stream does: a failed write drops the
+handle, and the next hazard alert (throttled to once every few seconds)
+retries opening the port rather than crashing the whole process.
+
 ---
 
 ## 🛰️ GPS via the Waveshare SIM7600X

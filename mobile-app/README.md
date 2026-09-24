@@ -13,9 +13,19 @@ The mobile companion application acts as the "Think + Connect" brain of the syst
    - Pushes updates to the helmet's BLE navigation characteristic.
 
 2. **Emergency SOS & Fall Dispatch:**
-   - Subscribes to the helmet's BLE Hazard & Impact characteristic.
-   - If a sustained crash or orientation flip is signaled, the app initiates a 10-second cancel countdown.
-   - If not cancelled, it automatically dispatches an SMS and emergency call with live GPS coordinates to configured emergency contacts.
+   - Subscribes to the helmet's BLE Hazard & SOS characteristic.
+   - A `CRASH_DETECTED` event means the helmet's IMU already saw a decel spike
+     followed by a sustained tilt and started its own 10-second on-HUD
+     countdown; the app should mirror that countdown (speaking
+     `announceCrash` from [`src/voicePrompts.ts`](src/voicePrompts.ts)) rather
+     than starting an independent one, since the two would drift apart.
+   - If a `SOS_CANCELLED` event arrives before the countdown elapses, the
+     rider pressed the helmet's PTT button — abort the dispatch.
+   - If the countdown elapses with no `SOS_CANCELLED`, dispatch an SMS and
+     emergency call with the event's GPS coordinates (when `hasGpsFix` is
+     true) to configured emergency contacts.
+   - `POTHOLE_BUMP` events are the crowdsourced hazard-logging signal
+     described below, not a crash — no countdown or dispatch for these.
 
 3. **Audio Management & Ducking:**
    - Lowers playback volume of background music when navigation audio prompts or hazard alerts trigger.
@@ -25,6 +35,10 @@ The mobile companion application acts as the "Think + Connect" brain of the syst
 
 4. **Crowdsourced Hazard Logging:**
    - Batches GPS-tagged bump events detected by the helmet IMU and uploads them to the central backend.
+   - `POTHOLE_BUMP` hazard events go to the `hazard_logs` table; `CRASH_DETECTED`/
+     `SOS_CANCELLED` events go to `crash_events` (status `detected` →
+     `cancelled` or `dispatched`) — see
+     [`../website/supabase_schema.sql`](../website/supabase_schema.sql).
 
 5. **Incoming Call Alerts:**
    - Subscribes to the phone's native call state (e.g. Android `TelephonyManager`/
@@ -49,7 +63,16 @@ The mobile companion application acts as the "Think + Connect" brain of the syst
   - Direction IDs: `1=LEFT`, `2=RIGHT`, `3=STRAIGHT`, `4=U-TURN`, `5=DESTINATION`
   - Example: `02 00 78` means `RIGHT`, `120 m`. The ESP32 draws the arrow.
 - **Hazard & SOS Characteristic (Notify):** `1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e`
-  - Payload format: `[EventType: 1B][G-Force: 2B][Lat: 4B][Lon: 4B]`
+  - Helmet → phone, from the MPU6050 IMU. Payload format:
+    `[EventType: 1B][G-Force: 2B big-endian][Lat: 4B big-endian][Lon: 4B big-endian]`
+  - EventType: `1=POTHOLE_BUMP`, `2=CRASH_DETECTED`, `3=SOS_CANCELLED`
+  - G-Force is fixed-point, `round(g * 100)` as an unsigned 16-bit int (e.g.
+    `550` = `5.50g`), clamped to `[0, 655.35]`.
+  - Lat/Lon are fixed-point signed 32-bit ints, `round(deg * 1_000_000)` —
+    matching the 6-decimal precision `vision-ai/gps_sim7600x.py` already
+    uses — rather than raw floats, so there's no float-endianness ambiguity
+    to get wrong on this side. The helmet sends `(0, 0)` when it has no GPS
+    fix yet; treat that as "no location," not the middle of the ocean.
 - **Call Alert Characteristic (Read/Write):** `77c1bfdd-ed70-4894-b5c5-7e973c7793ec`
   - Phone → helmet. Payload format: `[EventType: 1B][NameLength: 1B][Name: up to 18 ASCII bytes]`
   - EventType: `1=RINGING`, `2=ENDED` (name omitted/ignored for `ENDED`)
@@ -68,6 +91,10 @@ should write a fresh `RINGING` packet only when a *new* call starts (not on
 every native callback tick), and always follow up with `ENDED` once the phone
 knows the call is no longer ringing.
 
+The Hazard & SOS decode/encode helpers are implemented in
+[`src/hazardProtocol.ts`](src/hazardProtocol.ts) (the encoder is mainly for
+tests — the ESP32 is the real encoder for this characteristic).
+
 The reusable OSRM-to-BLE mapping is implemented in
 [`src/navigationProtocol.ts`](src/navigationProtocol.ts). The routing screen
 should recalculate `distanceToManeuverMeters` from the rider's live GPS position
@@ -85,3 +112,7 @@ repeatedly. Trigger `announcePothole` when a new avoidance alert arrives.
 Trigger `announceIncomingCall` once per `RINGING` packet written to the call
 characteristic (the caller's raw/unsanitized name — the ASCII sanitization in
 `callAlertProtocol.ts` is only needed for the HUD's BLE payload, not for speech).
+Trigger `announceCrash` once per `CRASH_DETECTED` hazard event — this is the
+"audible alert to rider" the SOS flow calls for (see
+[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)); don't repeat it for
+`POTHOLE_BUMP` events, which are a silent background logging signal.

@@ -66,3 +66,20 @@ export function announceIncomingCall(
 ): void | Promise<void> {
   return speech.speak(incomingCallVoicePrompt(callerName));
 }
+
+export function crashVoicePrompt(cancelWindowSeconds: number): string {
+  const seconds = Math.max(0, Math.round(cancelWindowSeconds));
+  return (
+    `Crash detected. Sending an SOS with your location in ${seconds} seconds. ` +
+    "Press the helmet button now to cancel."
+  );
+}
+
+/** Trigger when a CRASH_DETECTED hazard event arrives; this is the "audible
+ *  alert to rider" the crash/SOS flow calls for (see docs/ARCHITECTURE.md). */
+export function announceCrash(
+  speech: SpeechEngine,
+  cancelWindowSeconds: number = 10,
+): void | Promise<void> {
+  return speech.speak(crashVoicePrompt(cancelWindowSeconds));
+}
