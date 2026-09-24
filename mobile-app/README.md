@@ -26,6 +26,19 @@ The mobile companion application acts as the "Think + Connect" brain of the syst
 4. **Crowdsourced Hazard Logging:**
    - Batches GPS-tagged bump events detected by the helmet IMU and uploads them to the central backend.
 
+5. **Incoming Call Alerts:**
+   - Subscribes to the phone's native call state (e.g. Android `TelephonyManager`/
+     `PhoneStateListener`, iOS CallKit) and, on a new incoming call, writes a
+     `RINGING` packet with the caller's display name to the helmet's call
+     characteristic, then an `ENDED` packet when the call stops ringing for any
+     reason (answered elsewhere, declined elsewhere, or timed out).
+   - Speaks `Incoming call from <name>. Tap the helmet button to accept, or hold
+     it to decline.` via [`src/voicePrompts.ts`](src/voicePrompts.ts)'s
+     `announceIncomingCall`.
+   - Subscribes to the helmet's call-action characteristic and calls the native
+     answer/reject call API when the rider taps (accept) or holds (decline) the
+     helmet's PTT button.
+
 ---
 
 ## 📡 BLE Protocol Specification
@@ -37,6 +50,23 @@ The mobile companion application acts as the "Think + Connect" brain of the syst
   - Example: `02 00 78` means `RIGHT`, `120 m`. The ESP32 draws the arrow.
 - **Hazard & SOS Characteristic (Notify):** `1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e`
   - Payload format: `[EventType: 1B][G-Force: 2B][Lat: 4B][Lon: 4B]`
+- **Call Alert Characteristic (Read/Write):** `77c1bfdd-ed70-4894-b5c5-7e973c7793ec`
+  - Phone → helmet. Payload format: `[EventType: 1B][NameLength: 1B][Name: up to 18 ASCII bytes]`
+  - EventType: `1=RINGING`, `2=ENDED` (name omitted/ignored for `ENDED`)
+  - The 18-byte cap plus the 2-byte header keeps the packet at the default
+    20-byte BLE ATT write payload, so it works without negotiating a larger MTU.
+  - The HUD only renders ASCII (Adafruit GFX's default font), so non-ASCII
+    characters in the caller name are replaced with `?` before encoding.
+- **Call Action Characteristic (Notify):** `1f221721-edb9-4bd8-b18b-df997197e3d0`
+  - Helmet → phone. Payload format: `[Action: 1B]`, `1=ACCEPT`, `2=DECLINE`
+  - Sent once, when the rider releases the PTT button while a call is ringing:
+    a short press (< 600 ms) is `ACCEPT`, a long press (≥ 600 ms) is `DECLINE`.
+
+The encode/decode helpers are implemented in
+[`src/callAlertProtocol.ts`](src/callAlertProtocol.ts). The routing screen
+should write a fresh `RINGING` packet only when a *new* call starts (not on
+every native callback tick), and always follow up with `ENDED` once the phone
+knows the call is no longer ringing.
 
 The reusable OSRM-to-BLE mapping is implemented in
 [`src/navigationProtocol.ts`](src/navigationProtocol.ts). The routing screen
@@ -52,3 +82,6 @@ Connect its `SpeechEngine` interface to the app's text-to-speech library. Trigge
 `announceNavigation` when the routing engine emits a spoken maneuver event, not
 on every distance BLE update, so the rider does not hear the same instruction
 repeatedly. Trigger `announcePothole` when a new avoidance alert arrives.
+Trigger `announceIncomingCall` once per `RINGING` packet written to the call
+characteristic (the caller's raw/unsanitized name — the ASCII sanitization in
+`callAlertProtocol.ts` is only needed for the HUD's BLE payload, not for speech).

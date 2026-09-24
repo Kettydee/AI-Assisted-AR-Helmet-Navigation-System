@@ -38,6 +38,7 @@ Inspired by commercial smart helmets like **Jarvish** and **CrossHelmet**, the s
 | **🚨 Crash & Fall Detection (SOS)** | Detects rapid deceleration and orientation flip; automatically triggers an emergency SMS/call with live GPS coordinates to pre-configured emergency contacts. |
 | **🎧 AI Music Dimming** | Automatic audio ducking that lowers media volume whenever turn prompts, incoming calls, or hazard warnings are announced. |
 | **📞 Hands-Free AI Voice Assistant** | Bluetooth HFP bridge to Google Assistant / Siri triggered by a physical helmet-mounted push-to-talk (PTT) button. |
+| **☎️ Incoming Call Alerts** | The HUD shows the caller's name for an incoming call and speaks it aloud; tap the PTT button to accept or hold it to decline, no phone glance required. |
 | **🔊 Adaptive Ambient Sound** | Bone-conduction audio transducers paired with an I2S mic enhance traffic and horn frequencies while attenuating wind noise. |
 | **🛑 Overspeed & Geofence Alerts** | Compares GPS-derived ground speed against speed-limit tables in the companion app, flashing HUD warnings if exceeded. |
 | **📷 Vision-Based Hazards (Stretch)** | Forward-facing camera module paired with edge YOLOv8-nano for real-time visual road obstacle recognition. |

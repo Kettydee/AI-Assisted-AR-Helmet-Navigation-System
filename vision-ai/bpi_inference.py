@@ -5,9 +5,11 @@ Author: AI-Assisted AR Helmet Team
 """
 
 import argparse
+import json
 import os
 import sys
 import time
+from collections import deque
 import cv2
 
 try:
@@ -17,6 +19,33 @@ except ImportError:
 
 from ultralytics import YOLO
 from avoidance import choose_avoidance_direction
+
+DEFAULT_CONF = 0.50
+
+
+def resolve_confidence(explicit_conf, model_path, default=DEFAULT_CONF):
+    """Pick the detection confidence threshold.
+
+    An explicit --conf always wins. Otherwise, look for model_metadata.json
+    (written by train.py's post-training calibration sweep) next to the model
+    and use its argmax-F1 threshold instead of a guessed constant.
+    """
+    if explicit_conf is not None:
+        return explicit_conf, None
+
+    metadata_dir = model_path if os.path.isdir(model_path) else (os.path.dirname(model_path) or ".")
+    metadata_path = os.path.join(metadata_dir, "model_metadata.json")
+    if os.path.isfile(metadata_path):
+        try:
+            with open(metadata_path) as f:
+                metadata = json.load(f)
+            calibrated = metadata.get("calibrated_conf_threshold")
+            if isinstance(calibrated, (int, float)):
+                return float(calibrated), metadata_path
+        except (OSError, ValueError) as exc:
+            print(f"[WARN] Could not read {metadata_path}: {exc}")
+
+    return default, None
 
 
 def draw_direction_arrow(frame, direction):
@@ -60,12 +89,22 @@ def parse_args():
                         help="Serial port connected to ESP32-S3 (e.g., /dev/ttyS1, /dev/ttyUSB0)")
     parser.add_argument("--baudrate", type=int, default=115200,
                         help="UART baud rate")
-    parser.add_argument("--conf", type=float, default=0.50,
-                        help="Confidence threshold for detection")
+    parser.add_argument("--conf", type=float, default=None,
+                        help="Confidence threshold for detection. Default: read "
+                             "calibrated_conf_threshold from model_metadata.json next to "
+                             f"--model if present, else {DEFAULT_CONF}")
+    parser.add_argument("--iou", type=float, default=0.70,
+                        help="NMS IoU threshold for suppressing duplicate/overlapping boxes")
     parser.add_argument("--area-threshold", type=int, default=2200,
                         help="Minimum bounding box pixel area to trigger high-severity alert")
     parser.add_argument("--lane-margin", type=float, default=0.25,
                         help="Fraction of frame width on sides excluded from rider center lane")
+    parser.add_argument("--consensus-frames", type=int, default=3,
+                        help="Sliding window size (frames) for hazard consensus voting")
+    parser.add_argument("--consensus-hits", type=int, default=2,
+                        help="Hazard must appear in at least this many of the last "
+                             "--consensus-frames frames before an alert fires (cuts "
+                             "single-frame false positives at a small latency cost)")
     parser.add_argument("--headless", action="store_true",
                         help="Run without displaying GUI window (recommended for helmet embedded runtime)")
     parser.add_argument("--threads", type=int, default=4,
@@ -120,6 +159,17 @@ def init_serial(port, baudrate):
 def main():
     args = parse_args()
 
+    if not 1 <= args.consensus_hits <= args.consensus_frames:
+        print(f"[FATAL] --consensus-hits ({args.consensus_hits}) must be between 1 and "
+              f"--consensus-frames ({args.consensus_frames}).")
+        sys.exit(1)
+
+    args.conf, conf_source = resolve_confidence(args.conf, args.model)
+    if conf_source:
+        print(f"[INFO] Using calibrated confidence threshold {args.conf} from {conf_source}")
+    else:
+        print(f"[INFO] Using confidence threshold {args.conf} (no calibration metadata found)")
+
     # Set OpenCV and OpenMP threads for BPI-M4 quad-core
     os.environ["OMP_NUM_THREADS"] = str(args.threads)
     cv2.setNumThreads(args.threads)
@@ -141,6 +191,7 @@ def main():
     ALERT_COOLDOWN = 0.5  # seconds between consecutive serial alert frames
     frame_count = 0
     start_time = time.time()
+    hazard_window = deque(maxlen=args.consensus_frames)
 
     print("[INFO] Banana Pi M4 Pothole Detection Service running. Press Ctrl+C to terminate.")
 
@@ -179,7 +230,7 @@ def main():
             lane_max_x = int(w * (1.0 - args.lane_margin))
 
             # Run inference
-            results = model.predict(source=frame, conf=args.conf, verbose=False)
+            results = model.predict(source=frame, conf=args.conf, iou=args.iou, verbose=False)
 
             hazard_detected = False
             max_hazard_area = 0
@@ -202,14 +253,19 @@ def main():
                             max_hazard_area = int(area)
                             best_hazard_conf = conf
 
+            # Require the hazard to reappear across a short sliding window before
+            # alerting, so a single noisy frame can't fire a false POTHOLE_ALERT.
+            hazard_window.append(hazard_detected)
+            consensus_hazard = hazard_window.count(True) >= args.consensus_hits
+
             avoidance_direction = None
-            if hazard_detected:
+            if consensus_hazard:
                 avoidance_direction = choose_avoidance_direction(
                     hazard_boxes, w, h, args.lane_margin
                 )
 
             now = time.time()
-            if hazard_detected and (now - last_alert_time > ALERT_COOLDOWN):
+            if consensus_hazard and (now - last_alert_time > ALERT_COOLDOWN):
                 last_alert_time = now
                 alert_msg = (
                     f"POTHOLE_ALERT:{avoidance_direction}:"

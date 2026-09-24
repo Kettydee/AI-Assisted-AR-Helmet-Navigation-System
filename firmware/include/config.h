@@ -36,3 +36,15 @@
 // "GPS:<lat>:<lon>:<fix>" (see vision-ai/gps_sim7600x.py --serial-out).
 // A fix older than this is treated as lost.
 #define GPS_FIX_TIMEOUT_MS 5000
+
+// Incoming-call alerts (see mobile-app/src/callAlertProtocol.ts). Caller name
+// length must match MAX_CALLER_NAME_LENGTH there (sized to fit the default
+// 20-byte BLE ATT write payload without MTU negotiation).
+#define MAX_CALLER_NAME_LEN 18
+// Safety net if the phone's ENDED write is lost (e.g. a BLE disconnect).
+#define CALL_ALERT_TIMEOUT_MS 30000
+
+// Push-To-Talk press timing: ignore anything shorter than the debounce as
+// switch bounce; while a call is ringing, short = accept, long = decline.
+#define PTT_DEBOUNCE_MS 30
+#define PTT_LONG_PRESS_MS 600
