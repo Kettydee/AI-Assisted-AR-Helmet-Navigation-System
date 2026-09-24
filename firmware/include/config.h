@@ -31,3 +31,8 @@
 #define BPI_UART_TX_PIN 19
 #define BPI_UART_BAUDRATE 115200
 #define VISION_ALERT_DURATION_MS 3000
+
+// Banana Pi M4 also forwards SIM7600X GPS fixes on the same UART as
+// "GPS:<lat>:<lon>:<fix>" (see vision-ai/gps_sim7600x.py --serial-out).
+// A fix older than this is treated as lost.
+#define GPS_FIX_TIMEOUT_MS 5000
