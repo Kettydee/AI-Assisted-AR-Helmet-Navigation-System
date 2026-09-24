@@ -37,6 +37,11 @@ node with the ESP32 kept for the helmet-side HUD/audio/BLE role:
       stream URL (ESP32-CAM) with newest-frame buffering and auto-reconnect;
       local camera indices/devices unchanged.
 - [x] `hardware/wiring/sim7600x.md` added — USB/UART enumeration and antenna notes.
+- [x] `firmware/src/main.cpp` now parses the `GPS:<lat>:<lon>:<fix>` lines
+      `gps_sim7600x.py --serial-out` forwards over the existing Banana Pi UART
+      (alongside `POTHOLE_ALERT`), storing the latest fix and lighting a small
+      GPS-lock dot on the SSD1306 HUD; a fix is dropped after
+      `GPS_FIX_TIMEOUT_MS` (5 s) of silence.
 
 ### Earlier — Software scaffolding (see `git log`)
 
@@ -56,8 +61,9 @@ node with the ESP32 kept for the helmet-side HUD/audio/BLE role:
       record achievable FPS with the NCNN model at 416 and 320 px.
 - [ ] Feed `gps_sim7600x.py` output into a telemetry/SOS process (GPS-tagged bump
       logging, crash-dispatch coordinates).
-- [ ] Confirm the Banana Pi ↔ ESP32-S3 UART wiring end to end (`POTHOLE_ALERT` +
-      `GPS:` lines) and update `firmware/` if the ESP32 needs to parse `GPS:`.
+- [ ] Confirm the Banana Pi ↔ ESP32-S3 UART wiring end to end on real hardware
+      (`POTHOLE_ALERT` + `GPS:` lines) — firmware now parses both; look for the
+      GPS-lock dot on the HUD to confirm the `GPS:` path.
 - [ ] Bring up the SSD1306 HUD + BLE on the ESP32-S3 hardware.
 - [ ] Decide whether routing/SOS stays on a companion phone or moves onto the
       Banana Pi over the SIM7600X data connection.

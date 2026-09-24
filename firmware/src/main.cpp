@@ -39,6 +39,12 @@ bool visionAlertActive = false;
 unsigned long visionAlertStartTime = 0;
 AvoidanceDirection currentAvoidanceDirection = AvoidanceDirection::CENTER;
 
+// GPS State (Banana Pi M4 / SIM7600X, forwarded as "GPS:<lat>:<lon>:<fix>")
+bool gpsFixValid = false;
+float gpsLatitude = 0.0f;
+float gpsLongitude = 0.0f;
+unsigned long gpsLastFixTime = 0;
+
 // BLE Service UUIDs
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define NAV_CHAR_UUID       "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -141,6 +147,23 @@ void drawDirectionArrow(NavigationDirection direction, int x, int y, int size) {
     }
 }
 
+bool parseGpsLine(const String& line, float& lat, float& lon, bool& fix) {
+    // Format: "GPS:<lat>:<lon>:<fix>", e.g. "GPS:37.774900:-122.419400:1"
+    if (!line.startsWith("GPS:")) {
+        return false;
+    }
+    String rest = line.substring(4);
+    int latEnd = rest.indexOf(':');
+    int lonEnd = rest.indexOf(':', latEnd + 1);
+    if (latEnd < 0 || lonEnd < 0) {
+        return false;
+    }
+    lat = rest.substring(0, latEnd).toFloat();
+    lon = rest.substring(latEnd + 1, lonEnd).toFloat();
+    fix = rest.substring(lonEnd + 1).toInt() != 0;
+    return true;
+}
+
 void drawCenteredText(const String& text, int y, uint8_t size) {
     int16_t x1, y1;
     uint16_t width, height;
@@ -165,6 +188,11 @@ void initDisplay() {
 
 void renderHUD(NavigationDirection direction, uint16_t distanceMeters) {
     display.clearDisplay();
+
+    // Small top-right dot confirms a live GPS fix is reaching the ESP32 over UART.
+    if (gpsFixValid) {
+        display.fillCircle(SCREEN_WIDTH - 4, 4, 2, SSD1306_WHITE);
+    }
 
     // A pothole warning temporarily takes priority over map navigation.
     if (visionAlertActive) {
@@ -241,7 +269,7 @@ void setup() {
 }
 
 void loop() {
-    // Read incoming vision alerts from Banana Pi M4 over UART
+    // Read incoming vision alerts + GPS fixes from Banana Pi M4 over UART
     while (BpiSerial.available()) {
         String line = BpiSerial.readStringUntil('\n');
         line.trim();
@@ -257,6 +285,15 @@ void loop() {
             visionAlertActive = true;
             visionAlertStartTime = millis();
             digitalWrite(AUDIO_MUTE_PIN, HIGH); // Auto audio ducking
+        } else if (line.startsWith("GPS:")) {
+            float lat, lon;
+            bool fix;
+            if (parseGpsLine(line, lat, lon, fix) && fix) {
+                gpsLatitude = lat;
+                gpsLongitude = lon;
+                gpsFixValid = true;
+                gpsLastFixTime = millis();
+            }
         }
     }
 
@@ -264,6 +301,11 @@ void loop() {
     if (visionAlertActive && (millis() - visionAlertStartTime > VISION_ALERT_DURATION_MS)) {
         visionAlertActive = false;
         digitalWrite(AUDIO_MUTE_PIN, LOW); // Restore audio
+    }
+
+    // Drop a stale GPS fix so the HUD indicator reflects a lost signal
+    if (gpsFixValid && (millis() - gpsLastFixTime > GPS_FIX_TIMEOUT_MS)) {
+        gpsFixValid = false;
     }
 
     // Render HUD navigation overlay
