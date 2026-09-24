@@ -1,57 +1,143 @@
 # Companion Mobile Application
 
-The mobile companion application acts as the "Think + Connect" brain of the system, delegating visual feedback and sensor capture to the ESP32-S3 helmet unit over Bluetooth Low Energy (BLE).
+An Expo / React Native app that acts as the "Think + Connect" brain of the
+system: it holds the BLE link to the ESP32-S3 helmet unit, relays incoming
+calls, and reacts to crash/SOS and pothole-bump events from the helmet's IMU.
+
+This used to be protocol-only (pure TypeScript logic files, no app to run).
+It's now a real Expo app built around that same logic — the protocol layer
+moved to `src/protocol/` unchanged; everything else here wires it to a real
+BLE stack, screens, and a couple of native features.
+
+---
+
+## ⚠️ Status: builds and typechecks, not yet run on a device
+
+Everything in this app — `npm run typecheck`, `npm test`, `npx expo-doctor` —
+passes in the sandbox this was built in, which has no phone, emulator, or
+Bluetooth hardware to actually run it against. Two pieces are honestly
+stubbed rather than faked (see [`src/telephony/CallObserver.ts`](src/telephony/CallObserver.ts)):
+detecting a native incoming call, and answering/declining one. Both need a
+native module and on-device testing to get right — see **Next** below.
+
+---
+
+## 🚀 Running it
+
+```bash
+npm install
+npm start          # then press `a` for Android / `i` for iOS / `w` for web
+```
+
+This app uses `react-native-ble-plx` (a native module), so **Expo Go can't
+run it** — Expo Go only bundles Expo's own native modules. You need a
+development build:
+
+```bash
+npx expo run:android   # or: npx expo run:ios (needs a Mac)
+# or, to build in the cloud without local Xcode/Android Studio:
+npx eas-cli@latest build --profile development
+```
+
+`android`/`ios` folders don't exist in this repo and shouldn't be hand-edited
+if they appear — Expo generates them (Continuous Native Generation) from
+`app.json` and the config plugins listed there, including
+`react-native-ble-plx`'s own bundled plugin (Bluetooth permissions on both
+platforms, background-mode entitlements on iOS).
+
+```bash
+npm run typecheck   # tsc --noEmit against the whole app
+npm test            # runs the pure-logic test suite (see Testing below)
+```
+
+---
+
+## 🗂️ Layout
+
+```
+src/
+  protocol/     pure encode/decode + voice-prompt logic (moved from the old
+                loose src/*.ts layout, unchanged) — see BLE Protocol Spec below
+  ble/          HelmetConnection (react-native-ble-plx wrapper), UUIDs, base64
+  hooks/        useHelmetConnection (BLE context), useCallRelay, useCrashAlert,
+                useSpeech
+  telephony/    CallObserver — native call detection/answer/decline (stubbed)
+  sos/          local emergency-contact storage + crash message/dispatch
+  components/   CrashOverlay (full-screen SOS countdown, always mounted)
+  app/          Expo Router screens — every file here is a route
+```
+
+`src/app/_layout.tsx` wraps the whole app in `HelmetConnectionProvider`,
+mounts `useCallRelay` once, and renders `CrashOverlay` alongside the screen
+stack rather than as a route — a crash alert needs to interrupt whatever
+screen the rider is on and can't be navigated away from mid-countdown the
+way a pushed route could be.
+
+Screens: `index` (connection status + links), `scan` (BLE device list),
+`test-panel` (send raw nav packets, view the last hazard event — **not**
+real turn-by-turn navigation; there's no routing engine wired in, see
+Next), `settings` (local SOS contacts).
 
 ---
 
 ## 📱 Responsibilities
 
 1. **Turn-by-Turn Routing Engine:**
-   - Interfaces with Google Maps Directions API / OpenStreetMap (OSRM).
+   - Interfaces with Google Maps Directions API / OpenStreetMap (OSRM). **Not
+     built yet** — `test-panel.tsx` lets you send raw direction+distance
+     packets to verify the BLE link, but nothing here calculates a real
+     route. See Next.
    - Reduces each maneuver to `LEFT`, `RIGHT`, `STRAIGHT`, `U-TURN`, or `DESTINATION`.
    - Serializes only the direction and remaining distance into a compact BLE packet.
    - Pushes updates to the helmet's BLE navigation characteristic.
 
 2. **Emergency SOS & Fall Dispatch:**
-   - Subscribes to the helmet's BLE Hazard & SOS characteristic.
+   - `useCrashAlert` subscribes to the helmet's BLE Hazard & SOS characteristic via `useHelmetConnection`.
    - A `CRASH_DETECTED` event means the helmet's IMU already saw a decel spike
      followed by a sustained tilt and started its own 10-second on-HUD
-     countdown; the app should mirror that countdown (speaking
-     `announceCrash` from [`src/voicePrompts.ts`](src/voicePrompts.ts)) rather
-     than starting an independent one, since the two would drift apart.
+     countdown; the app mirrors that countdown (speaking `announceCrash`)
+     rather than starting an independent one, since the two would drift apart.
    - If a `SOS_CANCELLED` event arrives before the countdown elapses, the
-     rider pressed the helmet's PTT button — abort the dispatch.
-   - If the countdown elapses with no `SOS_CANCELLED`, dispatch an SMS and
-     emergency call with the event's GPS coordinates (when `hasGpsFix` is
-     true) to configured emergency contacts.
+     rider pressed the helmet's PTT button — the overlay closes. The firmware
+     stops listening for that button once its own countdown elapses (see
+     `firmware/src/main.cpp`'s `loop()`), so the overlay's post-countdown
+     "dispatch" screen has its own local dismiss instead of waiting for a
+     `SOS_CANCELLED` that won't come.
+   - Once the countdown elapses, `CrashOverlay` shows the crash's GPS
+     coordinates (when `hasGpsFix` is true) and one-tap Call/Text buttons per
+     saved contact — real silent auto-dispatch isn't something a normal app
+     can do on either platform without special permissions, so this is the
+     "one tap for whoever's holding the phone" version. See `src/sos/`.
    - `POTHOLE_BUMP` events are the crowdsourced hazard-logging signal
      described below, not a crash — no countdown or dispatch for these.
 
 3. **Audio Management & Ducking:**
-   - Lowers playback volume of background music when navigation audio prompts or hazard alerts trigger.
-   - Speaks route prompts such as `Turn right in 120 meters` through the phone/helmet audio connection.
+   - Lowers playback volume of background music when navigation audio prompts or hazard alerts trigger. **Not built** — needs an audio-session library; ducking during TTS specifically is often handled by the OS automatically, but explicit music control isn't wired up.
+   - Speaks route prompts such as `Turn right in 120 meters` through the phone/helmet audio connection — `useSpeech` (expo-speech) implements this.
    - Speaks hazard prompts such as `Pothole detected. Go left` using the avoidance direction received from the helmet.
-   - Routes voice calls over Bluetooth Hands-Free Profile (HFP) when the helmet's Push-To-Talk button is pressed.
+   - Routes voice calls over Bluetooth Hands-Free Profile (HFP) when the helmet's Push-To-Talk button is pressed — HFP audio routing itself is handled by the OS/Bluetooth stack once a call is answered; this app's job is just the answer/decline relay (see `useCallRelay`, and the CallObserver stub note above).
 
 4. **Crowdsourced Hazard Logging:**
-   - Batches GPS-tagged bump events detected by the helmet IMU and uploads them to the central backend.
+   - Batches GPS-tagged bump events detected by the helmet IMU and uploads them to the central backend. **Not built** — `POTHOLE_BUMP` events currently only update `test-panel.tsx`'s "last hazard event" display; nothing uploads them yet.
    - `POTHOLE_BUMP` hazard events go to the `hazard_logs` table; `CRASH_DETECTED`/
      `SOS_CANCELLED` events go to `crash_events` (status `detected` →
      `cancelled` or `dispatched`) — see
-     [`../website/supabase_schema.sql`](../website/supabase_schema.sql).
+     [`../website/supabase_schema.sql`](../website/supabase_schema.sql). This
+     app has no Supabase client/auth yet (see Next), so nothing writes to
+     either table today; `src/sos/contactsStore.ts`'s local, unsynced
+     AsyncStorage list is a stand-in for emergency contacts until it does.
 
 5. **Incoming Call Alerts:**
-   - Subscribes to the phone's native call state (e.g. Android `TelephonyManager`/
-     `PhoneStateListener`, iOS CallKit) and, on a new incoming call, writes a
-     `RINGING` packet with the caller's display name to the helmet's call
-     characteristic, then an `ENDED` packet when the call stops ringing for any
-     reason (answered elsewhere, declined elsewhere, or timed out).
+   - `useCallRelay` subscribes to the phone's native call state and, on a new
+     incoming call, writes a `RINGING` packet with the caller's display name
+     to the helmet's call characteristic, then an `ENDED` packet when the
+     call stops ringing for any reason. **The native call-state listener
+     itself is stubbed** — see `src/telephony/CallObserver.ts` and Next.
    - Speaks `Incoming call from <name>. Tap the helmet button to accept, or hold
-     it to decline.` via [`src/voicePrompts.ts`](src/voicePrompts.ts)'s
-     `announceIncomingCall`.
+     it to decline.` via `announceIncomingCall`.
    - Subscribes to the helmet's call-action characteristic and calls the native
      answer/reject call API when the rider taps (accept) or holds (decline) the
-     helmet's PTT button.
+     helmet's PTT button. **Also stubbed** for the same reason.
 
 ---
 
@@ -85,34 +171,83 @@ The mobile companion application acts as the "Think + Connect" brain of the syst
   - Sent once, when the rider releases the PTT button while a call is ringing:
     a short press (< 600 ms) is `ACCEPT`, a long press (≥ 600 ms) is `DECLINE`.
 
+All five characteristics are exercised end-to-end by
+[`src/ble/HelmetConnection.ts`](src/ble/HelmetConnection.ts), the single
+place that talks to `react-native-ble-plx` — everywhere else in the app goes
+through it rather than touching the BLE library directly.
+
 The encode/decode helpers are implemented in
-[`src/callAlertProtocol.ts`](src/callAlertProtocol.ts). The routing screen
-should write a fresh `RINGING` packet only when a *new* call starts (not on
-every native callback tick), and always follow up with `ENDED` once the phone
+[`src/protocol/callAlertProtocol.ts`](src/protocol/callAlertProtocol.ts). `useCallRelay`
+writes a fresh `RINGING` packet only when a *new* call starts (not on every
+native callback tick), and always follows up with `ENDED` once the phone
 knows the call is no longer ringing.
 
 The Hazard & SOS decode/encode helpers are implemented in
-[`src/hazardProtocol.ts`](src/hazardProtocol.ts) (the encoder is mainly for
+[`src/protocol/hazardProtocol.ts`](src/protocol/hazardProtocol.ts) (the encoder is mainly for
 tests — the ESP32 is the real encoder for this characteristic).
 
 The reusable OSRM-to-BLE mapping is implemented in
-[`src/navigationProtocol.ts`](src/navigationProtocol.ts). The routing screen
-should recalculate `distanceToManeuverMeters` from the rider's live GPS position
+[`src/protocol/navigationProtocol.ts`](src/protocol/navigationProtocol.ts). A real routing
+screen should recalculate `distanceToManeuverMeters` from the rider's live GPS position
 and write a new packet when the direction changes or the displayed distance
-changes meaningfully (for example, every 10 m).
+changes meaningfully (for example, every 10 m) — `test-panel.tsx` sends fixed
+test values instead, since there's no routing engine here yet.
 
 The AR display intentionally receives no words such as `GO LEFT`. It renders a
 large arrow, the compact label (`LEFT`, `RIGHT`, etc.), and the distance.
 
-Voice text is generated separately by [`src/voicePrompts.ts`](src/voicePrompts.ts).
-Connect its `SpeechEngine` interface to the app's text-to-speech library. Trigger
-`announceNavigation` when the routing engine emits a spoken maneuver event, not
-on every distance BLE update, so the rider does not hear the same instruction
-repeatedly. Trigger `announcePothole` when a new avoidance alert arrives.
-Trigger `announceIncomingCall` once per `RINGING` packet written to the call
-characteristic (the caller's raw/unsanitized name — the ASCII sanitization in
-`callAlertProtocol.ts` is only needed for the HUD's BLE payload, not for speech).
-Trigger `announceCrash` once per `CRASH_DETECTED` hazard event — this is the
-"audible alert to rider" the SOS flow calls for (see
-[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)); don't repeat it for
-`POTHOLE_BUMP` events, which are a silent background logging signal.
+Voice text is generated separately by [`src/protocol/voicePrompts.ts`](src/protocol/voicePrompts.ts),
+implemented against real speech by [`src/hooks/useSpeech.ts`](src/hooks/useSpeech.ts) (expo-speech).
+`announceNavigation` fires on a spoken maneuver event, not on every distance BLE update, so the
+rider doesn't hear the same instruction repeatedly. `announcePothole` fires on a new avoidance
+alert. `announceIncomingCall` fires once per `RINGING` packet (the caller's raw/unsanitized name —
+the ASCII sanitization in `callAlertProtocol.ts` is only needed for the HUD's BLE payload, not for
+speech). `announceCrash` fires once per `CRASH_DETECTED` hazard event — this is the "audible alert
+to rider" the SOS flow calls for (see [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)); it's not
+repeated for `POTHOLE_BUMP` events, which are a silent background logging signal.
+
+---
+
+## 🧪 Testing
+
+`npm test` compiles and runs everything under `src/protocol/`, plus a few
+other pure logic files (`ble/base64.ts`, `sos/contactValidation.ts`,
+`sos/crashMessage.ts`) with Node's built-in test runner — no Expo/React
+Native runtime involved, matching how `vision-ai/`'s Python tests stub out
+hardware-facing imports to test pure logic in isolation. This is a
+*separate* TypeScript config (`tsconfig.test.json`, plain CommonJS) from the
+app's own `tsconfig.json` (which extends `expo/tsconfig.base`) — see the
+comments in both files if you're adding a new pure-logic file to the suite.
+
+`HelmetConnection.ts`, the screens, and the hooks are **not** unit-tested:
+they need a real BLE stack (and, practically, a real helmet) to meaningfully
+exercise, which no amount of mocking substitutes for honestly. `npm run
+typecheck` and `npx expo-doctor` are the checks that do run against them.
+
+---
+
+## Next
+
+- **Native call detection/answer/decline** (`src/telephony/CallObserver.ts`)
+  is a stub. Implementing it for real: Android needs a native module around
+  `TelephonyManager`/`TelecomManager` (and likely registering as a
+  call-redirection or default dialer app for the answer/decline half); iOS
+  needs `CXCallObserver` (CallKit), e.g. via `react-native-callkeep`. Both
+  need a real device and, likely, a Play Store/App Store policy read before
+  shipping.
+- **A real routing engine.** `test-panel.tsx` proves the nav-packet wire
+  format works; turning that into actual turn-by-turn guidance needs the
+  Google Maps Directions API or OSRM, live location tracking, and a proper
+  map screen.
+- **Supabase auth + synced SOS contacts / hazard log uploads.** Right now
+  `src/sos/contactsStore.ts` is local-only (AsyncStorage, this device only)
+  and `POTHOLE_BUMP`/`CRASH_DETECTED` events aren't uploaded anywhere. Once
+  this app has its own Supabase client and auth (mirroring `website/`'s),
+  point it at `sos_contacts`/`hazard_logs`/`crash_events` from
+  `website/supabase_schema.sql`.
+- **Audio ducking** for background music specifically (TTS itself is
+  usually ducked automatically by the OS).
+- Everything above `npm run typecheck`/`npm test`/`npx expo-doctor` passing
+  in this repo needs to actually happen: a development build on a real
+  Android/iOS device, paired with real ESP32-S3 firmware from this same
+  repo, over a real BLE connection.

@@ -1,15 +1,40 @@
 {
-  "name": "mobile-app",
+  "name": "ar-helmet-nav",
   "private": true,
-  "version": "0.0.0",
-  "description": "BLE protocol + voice-prompt logic shared by the AR helmet's companion app. No app scaffold yet - see docs/PROGRESS.md.",
+  "version": "1.0.0",
+  "description": "Companion app for the AI-Assisted AR Helmet Navigation System: BLE link to the ESP32-S3 HUD, incoming-call relay, crash/SOS alerts.",
+  "main": "expo-router/entry",
   "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "pretest": "tsc",
-    "test": "node --test 'dist/**/*.test.js'"
+    "pretest": "tsc -p tsconfig.test.json",
+    "test": "node --test 'dist-test/**/*.test.js'"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.1.1",
+    "expo": "~57.0.24",
+    "expo-constants": "~57.0.19",
+    "expo-linking": "~57.0.10",
+    "expo-router": "~57.0.22",
+    "expo-speech": "~57.0.3",
+    "expo-splash-screen": "~57.0.9",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-ble-plx": "^3.5.1",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-web": "~0.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "~6.0.2"
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
   }
 }
