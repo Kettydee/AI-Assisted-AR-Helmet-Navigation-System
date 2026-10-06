@@ -22,6 +22,35 @@ node with the ESP32 kept for the helmet-side HUD/audio/BLE role:
 
 ## Milestones
 
+### 2026-10-06 — mobile-app v1.1.0: usable app, redesign, navigation, forced updates
+
+The v1.0.0 APK installed but was unusable: every scan failed with "Device is
+not authorized to use BluetoothLE" (Android 12+ needs BLUETOOTH_SCAN /
+BLUETOOTH_CONNECT requested *at runtime*, which the app never did), and bold
+labels were clipped on Android ("Not connected" rendered as "Not").
+
+- [x] Runtime BLE + location permission requests (`src/ble/permissions.ts`),
+      with granted / denied / blocked / Bluetooth-off states in the UI and
+      readable error messages instead of raw library strings.
+- [x] Scan timeout + rescan, RSSI signal bars, remembered helmet with
+      auto-reconnect at launch and exponential-backoff reconnect when the
+      link drops, MTU request after connecting.
+- [x] Redesign: Exo 2 font (fixes the clipping), design tokens, shared UI
+      components, bottom tabs (Ride / Helmet / Hazards / Settings),
+      first-launch onboarding, visor preview, new dark helmet app icon.
+- [x] Turn-by-turn navigation: Nominatim place search, OSRM routing, live
+      GPS progress, rerouting, voice prompts, overspeed warning, full-screen
+      ride dashboard; arrows are sent to the helmet over the existing nav
+      characteristic (protocol unchanged).
+- [x] Local hazard log (filters, map links, CSV export), ride history,
+      SOS contacts from the phonebook with primary/edit/test-SMS,
+      louder crash overlay (vibration, pulsing countdown).
+- [x] Forced update: the app checks GitHub Releases for a newer `app-v*`
+      tag and blocks with an "Update required" screen until it's installed;
+      the APK workflow now rejects tags that don't match `app.json`.
+- [x] `npm run typecheck`, `npm test` (70 tests) and an Android JS bundle
+      (`expo export`) pass. Not yet run against a real helmet.
+
 ### 2026-09-24 — mobile-app becomes a real Expo/React Native app
 
 `mobile-app/` was pure protocol logic with no app to run it in. It's now a

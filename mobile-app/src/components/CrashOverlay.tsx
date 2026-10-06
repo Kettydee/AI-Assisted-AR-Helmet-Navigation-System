@@ -1,9 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Vibration, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useCrashAlert } from "../hooks/useCrashAlert";
 import { crashLocationMessage, callContact, textContact } from "../sos/dispatchSos";
 import { loadContacts } from "../sos/contactsStore";
 import type { SosContact } from "../sos/contactValidation";
+import { AppText } from "./ui";
+import { fonts, radius, spacing } from "../theme";
+
+const RED = "#B91C1C";
+const RED_DEEP = "#7F1010";
 
 /** Always-mounted (not a routed screen) so a crash alert can interrupt
  *  whatever screen the rider is on, and can't be navigated away from
@@ -11,128 +18,195 @@ import type { SosContact } from "../sos/contactValidation";
 export function CrashOverlay() {
   const { phase, secondsRemaining, event, dismiss } = useCrashAlert();
   const [contacts, setContacts] = useState<SosContact[]>([]);
+  const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (phase === "dispatch") {
-      loadContacts().then(setContacts).catch(() => setContacts([]));
+    if (phase === "idle") {
+      Vibration.cancel();
+      return;
     }
-  }, [phase]);
+    loadContacts().then(setContacts).catch(() => setContacts([]));
+    if (phase === "counting") {
+      Vibration.vibrate([0, 600, 400], true);
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.08, duration: 450, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 450, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        ]),
+      );
+      loop.start();
+      return () => {
+        loop.stop();
+        Vibration.cancel();
+      };
+    }
+    Vibration.cancel();
+  }, [phase, pulse]);
 
   if (phase === "idle") {
     return null;
   }
 
+  const message = event ? crashLocationMessage(event) : "Possible crash detected by my AR helmet.";
+
   return (
-    <Modal visible transparent={false} animationType="fade">
-      <View style={styles.container}>
+    <Modal visible transparent={false} animationType="fade" statusBarTranslucent onRequestClose={() => undefined}>
+      <SafeAreaView style={[styles.container, phase === "dispatch" && styles.containerDispatch]}>
         {phase === "counting" ? (
-          <>
-            <Text style={styles.title}>CRASH DETECTED</Text>
-            <Text style={styles.countdown}>{secondsRemaining}</Text>
-            <Text style={styles.hint}>Press the helmet's PTT button now to cancel</Text>
-          </>
+          <View style={styles.center}>
+            <Ionicons name="warning" size={56} color="#ffffff" />
+            <AppText variant="title" weight="extrabold" align="center" style={styles.tracking}>
+              CRASH DETECTED
+            </AppText>
+            <Animated.View style={[styles.ring, { transform: [{ scale: pulse }] }]}>
+              <AppText style={styles.countdown} align="center">
+                {secondsRemaining}
+              </AppText>
+            </Animated.View>
+            <AppText variant="heading" weight="semibold" align="center">
+              Press the helmet button now to cancel
+            </AppText>
+            <AppText variant="small" color="#FFD7D7" align="center">
+              If you don't, your emergency contacts will be shown here to call.
+            </AppText>
+          </View>
         ) : (
-          <>
-            <Text style={styles.title}>SOS</Text>
-            <Text style={styles.hint}>
-              {event ? crashLocationMessage(event) : "Crash detected - no location available."}
-            </Text>
+          <ScrollView contentContainerStyle={styles.dispatch}>
+            <View style={styles.sosHeader}>
+              <Ionicons name="medkit" size={36} color="#ffffff" />
+              <AppText variant="display" weight="extrabold" style={styles.tracking}>
+                SOS
+              </AppText>
+            </View>
+            <AppText variant="small" color="#FFE5E5">
+              {message}
+            </AppText>
 
             {contacts.length === 0 ? (
-              <Text style={styles.hint}>
-                No emergency contacts saved yet - add some from Settings so this screen can call/text
-                them directly.
-              </Text>
+              <View style={styles.contactCard}>
+                <AppText weight="semibold">No emergency contacts saved.</AppText>
+                <AppText variant="small" color="#FFE5E5">
+                  Call your local emergency number. Add contacts later from Settings.
+                </AppText>
+              </View>
             ) : (
               contacts.map((contact) => (
-                <View key={contact.id} style={styles.contactRow}>
-                  <Text style={styles.contactName}>{contact.name}</Text>
-                  <Pressable
-                    style={styles.actionButton}
-                    onPress={() => {
-                      void callContact(contact);
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>Call</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.actionButton}
-                    onPress={() => {
-                      void textContact(contact, event ? crashLocationMessage(event) : "Crash detected.");
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>Text</Text>
-                  </Pressable>
+                <View key={contact.id} style={styles.contactCard}>
+                  <View style={styles.contactInfo}>
+                    <AppText variant="heading" weight="bold">
+                      {contact.name}
+                    </AppText>
+                    <AppText variant="small" color="#FFE5E5">
+                      {contact.phone}
+                    </AppText>
+                  </View>
+                  <View style={styles.actions}>
+                    <BigAction icon="call" label="Call" onPress={() => void callContact(contact)} />
+                    <BigAction icon="chatbubble" label="Text location" onPress={() => void textContact(contact, message)} />
+                  </View>
                 </View>
               ))
             )}
 
-            <Pressable style={styles.dismissButton} onPress={dismiss}>
-              <Text style={styles.dismissButtonText}>I'm safe, dismiss</Text>
+            <Pressable accessibilityRole="button" style={styles.dismiss} onPress={dismiss}>
+              <AppText weight="semibold">I'm safe - dismiss</AppText>
             </Pressable>
-          </>
+          </ScrollView>
         )}
-      </View>
+      </SafeAreaView>
     </Modal>
+  );
+}
+
+function BigAction({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.bigAction, pressed && { opacity: 0.8 }]}
+    >
+      <Ionicons name={icon} size={22} color={RED_DEEP} />
+      <AppText weight="bold" color={RED_DEEP}>
+        {label}
+      </AppText>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#7a0d0d",
+    backgroundColor: RED,
+  },
+  containerDispatch: {
+    backgroundColor: RED_DEEP,
+  },
+  center: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
-    gap: 16,
+    padding: spacing.xl,
+    gap: spacing.lg,
   },
-  title: {
-    color: "#ffffff",
-    fontSize: 32,
-    fontWeight: "800",
+  tracking: {
     letterSpacing: 2,
+  },
+  ring: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 6,
+    borderColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: spacing.lg,
   },
   countdown: {
     color: "#ffffff",
-    fontSize: 96,
-    fontWeight: "900",
+    fontFamily: fonts.extrabold,
+    fontSize: 104,
+    lineHeight: 120,
   },
-  hint: {
-    color: "#ffe5e5",
-    fontSize: 16,
-    textAlign: "center",
+  dispatch: {
+    padding: spacing.xl,
+    gap: spacing.lg,
   },
-  contactRow: {
+  sosHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    width: "100%",
+    gap: spacing.md,
   },
-  contactName: {
-    color: "#ffffff",
-    fontSize: 18,
+  contactCard: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  contactInfo: {
+    gap: 2,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  bigAction: {
     flex: 1,
-  },
-  actionButton: {
+    minHeight: 56,
     backgroundColor: "#ffffff",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: radius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
   },
-  actionButtonText: {
-    color: "#7a0d0d",
-    fontWeight: "700",
-  },
-  dismissButton: {
-    marginTop: 24,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+  dismiss: {
+    marginTop: spacing.lg,
+    minHeight: 56,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "#ffe5e5",
-  },
-  dismissButtonText: {
-    color: "#ffe5e5",
-    fontSize: 14,
+    borderColor: "#FFE5E5",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

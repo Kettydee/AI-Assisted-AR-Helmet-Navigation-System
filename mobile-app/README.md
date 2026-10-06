@@ -11,7 +11,7 @@ BLE stack, screens, and a couple of native features.
 
 ---
 
-## ⚠️ Status: builds and typechecks, not yet run on a device
+## ⚠️ Status: builds, typechecks and bundles; not yet run against a real helmet
 
 Everything in this app — `npm run typecheck`, `npm test`, `npx expo-doctor` —
 passes in the sandbox this was built in, which has no phone, emulator, or
@@ -72,18 +72,52 @@ npm test            # runs the pure-logic test suite (see Testing below)
 
 ---
 
+## 🔄 Releasing an update (riders are forced to update)
+
+Riders install the APK from GitHub Releases, so there's no Play Store to push
+updates. Instead, every launch (and every return to the foreground) the app
+calls the GitHub Releases API, finds the newest published `app-vX.Y.Z`
+release, and if it's newer than the installed version it shows a full-screen
+**Update required** page with a *Download update* button that downloads the
+APK. The app can't be used until it's updated; it does **not** block when the
+phone is offline or GitHub is unreachable, and a crash alert still shows on
+top of it. Logic: [`src/update/`](src/update/).
+
+To ship a new version:
+
+1. Bump `expo.version` **and** `expo.android.versionCode` in `app.json`
+   (and `version` in `package.json` to match).
+2. Commit, then tag and push: `git tag app-v1.2.0 && git push origin app-v1.2.0`.
+3. `.github/workflows/android-apk.yml` builds the APK and publishes the
+   release. It refuses to build if the tag doesn't match `app.json`'s
+   version - a mismatch would make every install think it's out of date
+   forever.
+
+The APK must keep being signed with the same key (the workflow's
+prebuild debug keystore) and the same Android package name, or Android
+installs it as a separate app instead of updating in place.
+
+---
+
 ## 🗂️ Layout
 
 ```
 src/
-  protocol/     pure encode/decode + voice-prompt logic (moved from the old
-                loose src/*.ts layout, unchanged) — see BLE Protocol Spec below
-  ble/          HelmetConnection (react-native-ble-plx wrapper), UUIDs, base64
-  hooks/        useHelmetConnection (BLE context), useCallRelay, useCrashAlert,
-                useSpeech
+  protocol/     pure encode/decode + voice-prompt logic — see BLE Protocol Spec below
+  ble/          HelmetConnection (react-native-ble-plx wrapper: runtime permissions,
+                scan timeout, MTU, auto-reconnect), UUIDs, base64, error messages
+  nav/          geo math + unit formatting, OSRM route parsing / progress
+                (pure, tested), osrmClient (OSRM routing + Nominatim search)
+  history/      hazard log + ride history records, CSV export (pure, tested)
+  settings/     app preferences (pure parse/defaults)
+  update/       forced-update check against GitHub Releases + UpdateGate screen
+  hooks/        useSettings, useHelmetConnection, useHistory, useRide (live
+                navigation engine), useCallRelay, useCrashAlert, useSpeech
   telephony/    CallObserver — native call detection/answer/decline (stubbed)
   sos/          local emergency-contact storage + crash message/dispatch
-  components/   CrashOverlay (full-screen SOS countdown, always mounted)
+  theme/        colour/spacing/type tokens (Exo 2 font)
+  components/   ui/ (AppText, Button, Card, ListRow, Banner...), HudPreview,
+                CrashOverlay (full-screen SOS countdown, always mounted)
   app/          Expo Router screens — every file here is a route
 ```
 
@@ -93,20 +127,27 @@ stack rather than as a route — a crash alert needs to interrupt whatever
 screen the rider is on and can't be navigated away from mid-countdown the
 way a pushed route could be.
 
-Screens: `index` (connection status + links), `scan` (BLE device list),
-`test-panel` (send raw nav packets, view the last hazard event — **not**
-real turn-by-turn navigation; there's no routing engine wired in, see
-Next), `settings` (local SOS contacts).
+Screens: bottom tabs in `(tabs)/` — **Ride** (`index`: helmet status, start
+navigation / free ride, visor preview, quick stats), **Helmet** (pairing with
+permission/Bluetooth-off handling, signal bars, auto-reconnect), **Hazards**
+(log of bumps/crashes with filters, map links, CSV export), **Settings**
+(units, speed warning, voice, updates). Stack screens: `onboarding`
+(first-launch setup), `navigate` (destination search), `ride` (full-screen
+riding dashboard), `contacts` (SOS contacts, phonebook picker, test SMS),
+`history` (ride history + totals), `developer` (send test arrows, raw packet
+log).
 
 ---
 
 ## 📱 Responsibilities
 
 1. **Turn-by-Turn Routing Engine:**
-   - Interfaces with Google Maps Directions API / OpenStreetMap (OSRM). **Not
-     built yet** — `test-panel.tsx` lets you send raw direction+distance
-     packets to verify the BLE link, but nothing here calculates a real
-     route. See Next.
+   - Routes with the public OSRM server and searches places with
+     OpenStreetMap Nominatim (no API keys). `useRide` watches GPS, tracks
+     progress along the route (`src/nav/route.ts`), reroutes when more than
+     45 m off route, speaks prompts at 500/200/50 m, and warns on overspeed.
+     There's no map view yet, and tracking only runs while the app is open
+     (the screen is kept awake during a ride) - see Next.
    - Reduces each maneuver to `LEFT`, `RIGHT`, `STRAIGHT`, `U-TURN`, or `DESTINATION`.
    - Serializes only the direction and remaining distance into a compact BLE packet.
    - Pushes updates to the helmet's BLE navigation characteristic.
@@ -138,7 +179,7 @@ Next), `settings` (local SOS contacts).
    - Routes voice calls over Bluetooth Hands-Free Profile (HFP) when the helmet's Push-To-Talk button is pressed — HFP audio routing itself is handled by the OS/Bluetooth stack once a call is answered; this app's job is just the answer/decline relay (see `useCallRelay`, and the CallObserver stub note above).
 
 4. **Crowdsourced Hazard Logging:**
-   - Batches GPS-tagged bump events detected by the helmet IMU and uploads them to the central backend. **Not built** — `POTHOLE_BUMP` events currently only update `test-panel.tsx`'s "last hazard event" display; nothing uploads them yet.
+   - Batches GPS-tagged bump events detected by the helmet IMU and uploads them to the central backend. **Upload not built** — every hazard event is saved to a local log on the phone (Hazards tab, CSV export) but nothing uploads it yet.
    - `POTHOLE_BUMP` hazard events go to the `hazard_logs` table; `CRASH_DETECTED`/
      `SOS_CANCELLED` events go to `crash_events` (status `detected` →
      `cancelled` or `dispatched`) — see
@@ -255,10 +296,11 @@ typecheck` and `npx expo-doctor` are the checks that do run against them.
   needs `CXCallObserver` (CallKit), e.g. via `react-native-callkeep`. Both
   need a real device and, likely, a Play Store/App Store policy read before
   shipping.
-- **A real routing engine.** `test-panel.tsx` proves the nav-packet wire
-  format works; turning that into actual turn-by-turn guidance needs the
-  Google Maps Directions API or OSRM, live location tracking, and a proper
-  map screen.
+- **Map view + background navigation.** Routing works (OSRM), but there's
+  no map on screen yet (react-native-maps needs a Google API key on Android;
+  MapLibre + OSM tiles would avoid that), and GPS tracking stops if the app
+  is backgrounded - a foreground-service location task (expo-task-manager)
+  would keep a ride running with the screen off.
 - **Supabase auth + synced SOS contacts / hazard log uploads.** Right now
   `src/sos/contactsStore.ts` is local-only (AsyncStorage, this device only)
   and `POTHOLE_BUMP`/`CRASH_DETECTED` events aren't uploaded anywhere. Once
