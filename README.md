@@ -6,8 +6,13 @@
 [![Hardware: ESP32-S3](https://img.shields.io/badge/Hardware-ESP32--S3-red.svg)](https://www.espressif.com/)
 [![Firmware: PlatformIO](https://img.shields.io/badge/Firmware-PlatformIO%2FArduino-orange.svg)](https://platformio.org/)
 [![CI](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/actions/workflows/ci.yml)
+[![Download Android APK](https://img.shields.io/badge/Download%20APK-v1.2.0-blue.svg?logo=android&logoColor=white)](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/releases/download/app-v1.2.0/ar-helmet-nav-app-v1.2.0.apk)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing)
 [![Status: Prototyping](https://img.shields.io/badge/Status-Active%20Prototyping-brightgreen.svg)]()
+
+> 📲 **Companion Android App:** Download the latest companion APK directly:
+> 👉 **[Download `ar-helmet-nav-app-v1.2.0.apk`](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/releases/download/app-v1.2.0/ar-helmet-nav-app-v1.2.0.apk)** | [View Release](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/releases/tag/app-v1.2.0)
+> Features live map canvas, background GPS foreground service, phone camera Road AI pothole scanning, and BLE HUD relay.
 
 > 🕳️ **Pothole Detection ML pipeline:** training notebooks, edge model exports (NCNN/ONNX), and Banana Pi BPI-M4 real-time inference now live alongside the rest of this repo.
 > 👉 **See the complete guide in [POTHOLE_TRAINING.md](POTHOLE_TRAINING.md)** or open the [Interactive Google Colab Notebook](https://colab.research.google.com/drive/1dOddPLRgAFKLsdCTcXO1J4sgXiA_Q1Wm?usp=sharing).

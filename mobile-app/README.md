@@ -11,7 +11,13 @@ BLE stack, screens, and a couple of native features.
 
 ---
 
-## ⚠️ Status: builds, typechecks and bundles; not yet run against a real helmet
+## 📥 Direct APK Download
+
+Download the companion app directly to your Android device:
+- 👉 **[Download `ar-helmet-nav-app-v1.2.0.apk`](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/releases/download/app-v1.2.0/ar-helmet-nav-app-v1.2.0.apk)** (Latest v1.2.0 Release)
+- **Release Page & Changelog:** [GitHub Releases](https://github.com/Kettydee/AI-Assisted-AR-Helmet-Navigation-System/releases/tag/app-v1.2.0)
+
+---
 
 Everything in this app — `npm run typecheck`, `npm test`, `npx expo-doctor` —
 passes in the sandbox this was built in, which has no phone, emulator, or
