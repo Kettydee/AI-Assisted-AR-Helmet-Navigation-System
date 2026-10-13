@@ -7,6 +7,7 @@ import { useHelmetConnection } from "../hooks/useHelmetConnection";
 import { useSettings } from "../hooks/useSettings";
 import { NavigationDirection } from "../protocol/navigationProtocol";
 import { HAZARD_LABEL } from "../history/records";
+import { simulateIncomingCall, simulateEndCall } from "../telephony/CallObserver";
 import { colors, fonts, radius, spacing } from "../theme";
 
 const DIRECTIONS = [
@@ -101,6 +102,27 @@ export default function DeveloperScreen() {
         ) : (
           <AppText color={colors.textMuted}>None received yet.</AppText>
         )}
+      </Card>
+
+      <SectionTitle>Telephony & Call Relay Test</SectionTitle>
+      <Card style={styles.distanceCard}>
+        <AppText variant="small" color={colors.textMuted}>
+          Test the phone-to-helmet incoming call alert, voice prompt, and helmet PTT answer/decline relay.
+        </AppText>
+        <View style={styles.steps}>
+          <Button
+            label="Simulate call: Mom"
+            icon="call"
+            compact
+            onPress={() => simulateIncomingCall("Mom")}
+          />
+          <Button
+            label="End call"
+            variant="ghost"
+            compact
+            onPress={() => simulateEndCall()}
+          />
+        </View>
       </Card>
 
       <SectionTitle>Packet log</SectionTitle>

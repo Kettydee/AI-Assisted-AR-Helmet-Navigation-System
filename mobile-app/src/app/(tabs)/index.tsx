@@ -121,6 +121,12 @@ export default function RideHome() {
           void ride.startRide(null);
         }}
       />
+      <Button
+        label="Road AI Scanner (Phone camera)"
+        icon="camera"
+        variant="secondary"
+        onPress={() => router.push("/scan-road")}
+      />
       {ride.error ? <Banner tone="danger" title="Couldn't start ride" message={ride.error} /> : null}
 
       <SectionTitle>Visor preview</SectionTitle>

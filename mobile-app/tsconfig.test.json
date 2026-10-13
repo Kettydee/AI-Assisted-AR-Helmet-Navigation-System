@@ -30,6 +30,7 @@
     "src/nav/route.test.ts",
     "src/history/**/*.ts",
     "src/update/updateCheck.ts",
-    "src/update/updateCheck.test.ts"
+    "src/update/updateCheck.test.ts",
+    "src/vision/**/*.ts"
   ]
 }

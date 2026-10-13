@@ -11,6 +11,7 @@ import { NavigationDirection } from "../protocol/navigationProtocol";
 import { useHelmetConnection } from "./useHelmetConnection";
 import { useHistory } from "./useHistory";
 import { useSettings } from "./useSettings";
+import { startBackgroundTracking, stopBackgroundTracking } from "../nav/backgroundLocation";
 
 export type RidePhase = "idle" | "starting" | "active";
 
@@ -249,6 +250,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const s = r.current;
     s.sub?.remove();
     s.sub = null;
+    void stopBackgroundTracking();
     deactivateKeepAwake(KEEP_AWAKE_TAG);
     Speech.stop();
 
@@ -332,6 +334,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
           { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 3 },
           onLocation,
         );
+        void startBackgroundTracking(onLocation);
       } catch {
         setError("Couldn't start GPS tracking.");
         setPhase("idle");
@@ -363,7 +366,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  useEffect(() => () => r.current.sub?.remove(), []);
+  useEffect(() => () => {
+    r.current.sub?.remove();
+    void stopBackgroundTracking();
+  }, []);
 
   return (
     <RideContext.Provider

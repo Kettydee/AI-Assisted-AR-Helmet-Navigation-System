@@ -18,6 +18,7 @@ interface HistoryContextValue {
   hazards: HazardRecord[];
   rides: RideRecord[];
   addRide: (ride: RideRecord) => void;
+  addHazard: (hazard: HazardRecord) => void;
   clearHazards: () => void;
   clearRides: () => void;
 }
@@ -59,6 +60,14 @@ export function HistoryProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const addHazard = useCallback((hazard: HazardRecord) => {
+    setHazards((prev) => {
+      const next = prepend(prev, hazard, MAX_HAZARDS);
+      void AsyncStorage.setItem(HAZARDS_KEY, JSON.stringify(next)).catch(() => undefined);
+      return next;
+    });
+  }, []);
+
   const clearHazards = useCallback(() => {
     setHazards([]);
     void AsyncStorage.removeItem(HAZARDS_KEY).catch(() => undefined);
@@ -70,7 +79,7 @@ export function HistoryProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <HistoryContext.Provider value={{ hazards, rides, addRide, clearHazards, clearRides }}>
+    <HistoryContext.Provider value={{ hazards, rides, addRide, addHazard, clearHazards, clearRides }}>
       {children}
     </HistoryContext.Provider>
   );

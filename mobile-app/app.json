@@ -2,7 +2,7 @@
   "expo": {
     "name": "AR Helmet Nav",
     "slug": "ar-helmet-nav",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "arhelmetnav",
@@ -20,9 +20,16 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.READ_PHONE_STATE",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.WAKE_LOCK"
       ],
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "output": "static",
@@ -52,7 +59,16 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for turn-by-turn navigation, speed and crash SOS."
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for turn-by-turn navigation, speed and crash SOS.",
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to navigate and track ride stats in the background while the screen is off.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to scan the road ahead for potholes and hazards in real time."
         }
       ],
       [
