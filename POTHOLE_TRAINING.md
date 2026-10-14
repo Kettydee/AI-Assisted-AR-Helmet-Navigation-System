@@ -138,3 +138,61 @@ Whenever an in-lane pothole is spotted, an alert packet is transmitted over UART
 │       SLOW DOWN        │
 └────────────────────────┘
 ```
+
+---
+
+## 📱 4. Running on a Phone (Pothole Cam)
+
+The companion app (`mobile-app/`) can run the same detector **on the phone
+itself**, using its back camera. No Banana Pi or helmet is needed. Open the
+app, tap **Pothole Cam** on the Ride tab, and mount the phone on the
+handlebar, facing the road.
+
+### Get a phone model
+
+`train.py` now also exports TFLite (pass `--no-tflite` to skip it; the first run
+installs TensorFlow). After training you'll have:
+
+```text
+vision-ai/phone_model/pothole.tflite        # YOLOv8n, ~12 MB (float32; float16 ~6 MB when the exporter makes one)
+vision-ai/phone_model/model_metadata.json   # calibrated confidence threshold
+```
+
+The Colab notebook remains a training option. For the app-ready model and
+calibrated metadata, run the TFLite export through `train.py`; if metadata is
+omitted, the app uses a `0.50` confidence threshold.
+
+### Publish it where the app looks
+
+The app downloads the model from the GitHub release tagged **`pothole-model`**
+the first time you open Pothole Cam, then caches it on the phone:
+
+1. On GitHub, go to **Releases → Draft a new release** and create the tag
+   `pothole-model`. Mark it as a pre-release so it never shows up as the "latest" app release.
+2. Attach `pothole.tflite`, plus `model_metadata.json` if you have it. Keep those exact file names.
+3. Publish. In the app, tap **Download model**.
+
+Or from a terminal with the GitHub CLI:
+```bash
+cd vision-ai/phone_model
+gh release create pothole-model pothole.tflite model_metadata.json \
+  --prerelease --title "Pothole model" --notes "On-phone pothole detector"
+# After retraining:
+gh release upload pothole-model pothole.tflite model_metadata.json --clobber
+```
+
+To use a model hosted somewhere else, paste its URL into the **Model URL**
+field on the Pothole Cam setup screen.
+
+### What the phone does
+
+Each camera frame is resized on the GPU to the model's input size, letterboxed
+the way Ultralytics expects, and run through TFLite (GPU delegate when the
+phone supports it, otherwise CPU). The app then applies the same rules as
+`bpi_inference.py`: lane gating (centre 50% of the frame), a minimum box area,
+2-of-3 frame consensus, and the LEFT/CENTER/RIGHT corridor scoring from
+`avoidance.py`. A confirmed pothole triggers a spoken warning ("Pothole
+detected. Go left."), a vibration, and an entry in the **Hazards** tab with the
+GPS location, labelled *Pothole (camera)*.
+
+Pothole Cam needs Android 8.0+ (with Vulkan for the GPU resizer) or iOS.

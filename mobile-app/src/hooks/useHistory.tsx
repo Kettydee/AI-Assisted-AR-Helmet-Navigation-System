@@ -7,8 +7,10 @@ import {
   parseList,
   prepend,
   type HazardRecord,
+  type HazardSource,
   type RideRecord,
 } from "../history/records";
+import type { HazardEvent } from "../protocol/hazardProtocol";
 import { useHelmetConnection } from "./useHelmetConnection";
 
 const HAZARDS_KEY = "vizor.hazards.v1";
@@ -18,7 +20,10 @@ interface HistoryContextValue {
   hazards: HazardRecord[];
   rides: RideRecord[];
   addRide: (ride: RideRecord) => void;
-  addHazard: (hazard: HazardRecord) => void;
+  addHazard: {
+    (hazard: HazardRecord): void;
+    (event: HazardEvent, source: HazardSource): void;
+  };
   clearHazards: () => void;
   clearRides: () => void;
 }
@@ -40,30 +45,26 @@ export function HistoryProvider({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, []);
 
-  useEffect(
-    () =>
-      connection.onHazardEvent.on((event) => {
-        setHazards((prev) => {
-          const next = prepend(prev, hazardRecordFrom(event, Date.now()), MAX_HAZARDS);
-          void AsyncStorage.setItem(HAZARDS_KEY, JSON.stringify(next)).catch(() => undefined);
-          return next;
-        });
-      }),
-    [connection],
+  const addHazard = useCallback(
+    ((hazardOrEvent: HazardRecord | HazardEvent, source?: HazardSource) => {
+      const record = "id" in hazardOrEvent
+        ? hazardOrEvent
+        : hazardRecordFrom(hazardOrEvent, Date.now(), source ?? "helmet");
+      setHazards((prev) => {
+        const next = prepend(prev, record, MAX_HAZARDS);
+        void AsyncStorage.setItem(HAZARDS_KEY, JSON.stringify(next)).catch(() => undefined);
+        return next;
+      });
+    }) as HistoryContextValue["addHazard"],
+    [],
   );
+
+  useEffect(() => connection.onHazardEvent.on((event) => addHazard(event, "helmet")), [connection, addHazard]);
 
   const addRide = useCallback((ride: RideRecord) => {
     setRides((prev) => {
       const next = prepend(prev, ride, MAX_RIDES);
       void AsyncStorage.setItem(RIDES_KEY, JSON.stringify(next)).catch(() => undefined);
-      return next;
-    });
-  }, []);
-
-  const addHazard = useCallback((hazard: HazardRecord) => {
-    setHazards((prev) => {
-      const next = prepend(prev, hazard, MAX_HAZARDS);
-      void AsyncStorage.setItem(HAZARDS_KEY, JSON.stringify(next)).catch(() => undefined);
       return next;
     });
   }, []);

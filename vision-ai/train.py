@@ -1,6 +1,7 @@
 """
 Pothole Detection Model Training & Export Script for Banana Pi M4
-Uses Ultralytics YOLOv8-nano and exports to NCNN & ONNX formats.
+Uses Ultralytics YOLOv8-nano and exports to NCNN & ONNX formats, plus a
+TFLite model for the companion app's on-phone Pothole Cam.
 
 Beyond the base IVCNZ dataset, this script can merge in any number of extra
 YOLO-format datasets (--extra-data, repeatable) so the model can be trained
@@ -23,6 +24,10 @@ from ultralytics import YOLO
 
 DATASET_URL = "https://github.com/jaygala24/pothole-detection/releases/download/v1.0.0/Pothole.Dataset.IVCNZ.zip"
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
+
+
+PHONE_MODEL_DIR = "phone_model"
+PHONE_MODEL_NAME = "pothole.tflite"
 
 
 # --------------------------------------------------------------------------- #
@@ -237,6 +242,32 @@ def calibrate_confidence(model, yaml_path, imgsz, split, thresholds, fallback=0.
 # CLI
 # --------------------------------------------------------------------------- #
 
+def stage_phone_model(tflite_export_path, metadata_path, out_dir=PHONE_MODEL_DIR):
+    """Collect the files the mobile app downloads into one folder.
+
+    Ultralytics >= 8.4 exports through LiteRT-Torch and writes a single
+    float32 best.tflite (NCHW input) next to best.pt. Older versions went via
+    onnx2tf and wrote best_float32.tflite + best_float16.tflite (NHWC) into
+    best_saved_model/; when a float16 file is there it is preferred (half the
+    size, no meaningful accuracy loss). The app handles both. The app expects
+    the asset to be called pothole.tflite, with model_metadata.json (the
+    calibrated confidence threshold) beside it.
+    """
+    export_dir = (tflite_export_path if os.path.isdir(tflite_export_path)
+                  else os.path.dirname(tflite_export_path))
+    float16 = sorted(glob.glob(os.path.join(export_dir, "*_float16.tflite")))
+    source = float16[0] if float16 else tflite_export_path
+    if not os.path.isfile(source):
+        raise FileNotFoundError(f"No .tflite model found at {tflite_export_path}")
+
+    os.makedirs(out_dir, exist_ok=True)
+    model_out = os.path.join(out_dir, PHONE_MODEL_NAME)
+    shutil.copy(source, model_out)
+    if metadata_path and os.path.isfile(metadata_path):
+        shutil.copy(metadata_path, os.path.join(out_dir, "model_metadata.json"))
+    return model_out
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train YOLOv8 Pothole Model for Banana Pi M4")
 
@@ -274,6 +305,11 @@ def main():
     calibration.add_argument("--conf-sweep-min", type=float, default=0.15)
     calibration.add_argument("--conf-sweep-max", type=float, default=0.85)
     calibration.add_argument("--conf-sweep-step", type=float, default=0.05)
+
+    export = parser.add_argument_group("export")
+    export.add_argument("--tflite", action=argparse.BooleanOptionalAction, default=True,
+                        help="Also export a TFLite model for the phone app's Pothole Cam "
+                             "(pulls in TensorFlow on first run; --no-tflite to skip)")
 
     args = parser.parse_args()
     if not 0 < args.val_split < 1 or not 0 <= args.test_split < 1 or args.val_split + args.test_split >= 1:
@@ -359,6 +395,16 @@ def main():
     if os.path.isdir(ncnn_dir):
         shutil.copy(metadata_path, os.path.join(ncnn_dir, "model_metadata.json"))
         print(f"[INFO] Copied metadata into {ncnn_dir}/ for Banana Pi deployment.")
+
+    if args.tflite:
+        print("\n3. Exporting to TFLite for the phone app (Pothole Cam)...")
+        try:
+            tflite_path = best_model.export(format="tflite", imgsz=args.imgsz)
+            phone_model = stage_phone_model(str(tflite_path), metadata_path)
+            print(f"[INFO] Phone model ready: {phone_model} (+ model_metadata.json).")
+            print("       Upload both files to the 'pothole-model' GitHub release - see POTHOLE_TRAINING.md.")
+        except Exception as exc:  # TF export is optional; never lose a finished training run to it.
+            print(f"[WARN] TFLite export failed ({exc}). The NCNN/ONNX exports above are unaffected.")
 
     print("\nExports complete. Ready for Banana Pi deployment! \U0001f680")
 

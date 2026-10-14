@@ -216,5 +216,41 @@ class CalibrateConfidenceTests(unittest.TestCase):
         self.assertEqual(sweep, [])
 
 
+class StagePhoneModelTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.export_dir = os.path.join(self.tmp, "best_saved_model")
+        os.makedirs(self.export_dir)
+        self.float32 = os.path.join(self.export_dir, "best_float32.tflite")
+        with open(self.float32, "wb") as f:
+            f.write(b"f32")
+        self.metadata = os.path.join(self.tmp, "model_metadata.json")
+        with open(self.metadata, "w") as f:
+            f.write('{"calibrated_conf_threshold": 0.4}')
+        self.out_dir = os.path.join(self.tmp, "phone_model")
+
+    def _read(self, path):
+        with open(path, "rb") as f:
+            return f.read()
+
+    def test_prefers_float16_and_copies_metadata(self):
+        with open(os.path.join(self.export_dir, "best_float16.tflite"), "wb") as f:
+            f.write(b"f16")
+        out = train.stage_phone_model(self.float32, self.metadata, self.out_dir)
+        self.assertEqual(os.path.basename(out), "pothole.tflite")
+        self.assertEqual(self._read(out), b"f16")
+        self.assertTrue(os.path.isfile(os.path.join(self.out_dir, "model_metadata.json")))
+
+    def test_falls_back_to_the_exported_file(self):
+        out = train.stage_phone_model(self.float32, None, self.out_dir)
+        self.assertEqual(self._read(out), b"f32")
+        self.assertFalse(os.path.exists(os.path.join(self.out_dir, "model_metadata.json")))
+
+    def test_missing_export_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            train.stage_phone_model(os.path.join(self.tmp, "nope.tflite"), None, self.out_dir)
+
+
 if __name__ == "__main__":
     unittest.main()

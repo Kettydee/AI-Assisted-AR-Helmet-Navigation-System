@@ -67,6 +67,7 @@ function AppShell() {
         <Stack.Screen name="history" options={{ title: "Ride history" }} />
         <Stack.Screen name="developer" options={{ title: "Developer tools" }} />
         <Stack.Screen name="scan-road" options={{ headerShown: false }} />
+        <Stack.Screen name="pothole-cam" options={{ title: "Pothole Cam" }} />
       </Stack>
       {/* Update gate covers the app when a newer release exists; CrashOverlay
           renders after it so a crash alert is never hidden behind it. */}

@@ -16,3 +16,9 @@ test("valid fields are kept, invalid ones ignored", () => {
   assert.equal(s.speedLimitKmh, DEFAULT_SETTINGS.speedLimitKmh);
   assert.equal(s.lastDeviceId, "AA:BB");
 });
+
+test("potholeModelUrl only accepts http(s) URLs", () => {
+  assert.equal(parseSettings(JSON.stringify({ potholeModelUrl: "https://x.test/m.tflite" })).potholeModelUrl, "https://x.test/m.tflite");
+  assert.equal(parseSettings(JSON.stringify({ potholeModelUrl: "file:///etc/passwd" })).potholeModelUrl, null);
+  assert.equal(parseSettings(JSON.stringify({ potholeModelUrl: 42 })).potholeModelUrl, null);
+});

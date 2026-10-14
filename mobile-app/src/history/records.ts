@@ -13,7 +13,15 @@ export interface HazardRecord {
   lat: number;
   lon: number;
   hasGpsFix: boolean;
+  /**
+   * Where the hazard came from. Missing on records saved before the phone
+   * camera detector existed, which were all from the helmet.
+   */
+  source?: HazardSource;
 }
+
+/** "helmet": the helmet's IMU felt a bump. "camera": the phone camera saw a pothole ahead. */
+export type HazardSource = "helmet" | "camera";
 
 export interface RideRecord {
   id: string;
@@ -34,8 +42,16 @@ export const HAZARD_LABEL: Record<HazardEventType, string> = {
   [HazardEventType.SOS_CANCELLED]: "SOS cancelled",
 };
 
-export function hazardRecordFrom(event: HazardEvent, at: number): HazardRecord {
-  return { id: `${at}-${event.type}`, at, ...event };
+export function hazardRecordFrom(event: HazardEvent, at: number, source: HazardSource = "helmet"): HazardRecord {
+  return { id: `${at}-${event.type}-${source}`, at, ...event, source };
+}
+
+/** Display label, telling camera sightings apart from bumps the helmet felt. */
+export function hazardLabel(record: Pick<HazardRecord, "type" | "source">): string {
+  if (record.source === "camera" && record.type === HazardEventType.POTHOLE_BUMP) {
+    return "Pothole (camera)";
+  }
+  return HAZARD_LABEL[record.type] ?? String(record.type);
 }
 
 /** Newest first, capped so storage can't grow forever. */
@@ -49,9 +65,9 @@ function csvCell(value: string | number | boolean): string {
 }
 
 export function hazardsToCsv(records: readonly HazardRecord[]): string {
-  const header = "time_iso,type,g_force,lat,lon,has_gps_fix";
+  const header = "time_iso,type,g_force,lat,lon,has_gps_fix,source";
   const rows = records.map((r) =>
-    [new Date(r.at).toISOString(), HAZARD_LABEL[r.type] ?? r.type, r.gForce.toFixed(2), r.lat, r.lon, r.hasGpsFix]
+    [new Date(r.at).toISOString(), hazardLabel(r), r.gForce.toFixed(2), r.lat, r.lon, r.hasGpsFix, r.source ?? "helmet"]
       .map(csvCell)
       .join(","),
   );

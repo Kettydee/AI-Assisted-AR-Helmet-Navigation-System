@@ -117,6 +117,9 @@ src/
   history/      hazard log + ride history records, CSV export (pure, tested)
   settings/     app preferences (pure parse/defaults)
   update/       forced-update check against GitHub Releases + UpdateGate screen
+  pothole/      Pothole Cam: YOLOv8 output decoding/NMS (camera-thread worklets),
+                lane/area gating + frame consensus + avoidance (pure, tested),
+                model download/cache, PotholeDetector (camera + overlay)
   hooks/        useSettings, useHelmetConnection, useHistory, useRide (live
                 navigation engine), useCallRelay, useCrashAlert, useSpeech
   telephony/    CallObserver — native call detection/answer/decline (stubbed)
@@ -141,7 +144,7 @@ permission/Bluetooth-off handling, signal bars, auto-reconnect), **Hazards**
 (first-launch setup), `navigate` (destination search), `ride` (full-screen
 riding dashboard), `contacts` (SOS contacts, phonebook picker, test SMS),
 `history` (ride history + totals), `developer` (send test arrows, raw packet
-log).
+log), `pothole-cam` (on-phone pothole detection with the back camera).
 
 ---
 
@@ -205,6 +208,42 @@ log).
    - Subscribes to the helmet's call-action characteristic and calls the native
      answer/reject call API when the rider taps (accept) or holds (decline) the
      helmet's PTT button. **Also stubbed** for the same reason.
+
+---
+
+## 🕳️ Pothole Cam (on-phone pothole detection)
+
+The **Pothole Cam** button on the Ride tab opens a live camera view that runs a
+YOLOv8n pothole detector on the phone. It doesn't use the helmet or the
+Banana Pi. Mount the phone on the handlebar, facing the road.
+
+- **Camera + inference:** `react-native-vision-camera` v5 frame output →
+  `react-native-vision-camera-resizer` (GPU resize/letterbox to the model
+  input) → `react-native-fast-tflite` (`android-gpu` / `core-ml` delegate,
+  CPU fallback). Decode + NMS run as worklets on the camera thread
+  (`src/pothole/yolo.ts`), and only the final boxes reach the JS thread.
+- **Alert rules:** `src/pothole/hazardLogic.ts` ports `vision-ai/avoidance.py`
+  and `bpi_inference.py`'s lane gating, area gating and 2-of-3 frame
+  consensus, so the phone and the Banana Pi agree. Its tests reuse
+  `test_avoidance.py`'s cases.
+- **On a confirmed pothole:** spoken warning (if voice prompts are on), a
+  vibration, and a *Pothole (camera)* entry with GPS in the Hazards log.
+- **The model isn't in the APK.** It's downloaded once from the `pothole-model`
+  GitHub release (`pothole.tflite`, plus an optional `model_metadata.json` with
+  the calibrated threshold) and cached on the phone. See
+  [`../POTHOLE_TRAINING.md`](../POTHOLE_TRAINING.md#-4-running-on-a-phone-pothole-cam)
+  for how to produce and publish it.
+
+Because of the GPU resizer, the app now requires **Android 8.0+ (API 26)**,
+set via `expo-build-properties` in `app.json`.
+
+`package.json`'s `expo` block excludes two `expo-doctor` warnings on purpose.
+`react-native-worklets` is pinned to 0.13.0, not the SDK's 0.10.x, because
+that's the version the app's `react-native-reanimated` 4.7 (pulled in by
+expo-router) already links, and only one native copy can be linked.
+`react-native-fast-tflite` gets flagged as "untested on New Architecture"
+only because its React Native Directory entry is out of date: v3 is a Nitro
+module.
 
 ---
 
@@ -279,7 +318,8 @@ repeated for `POTHOLE_BUMP` events, which are a silent background logging signal
 
 `npm test` compiles and runs everything under `src/protocol/`, plus a few
 other pure logic files (`ble/base64.ts`, `sos/contactValidation.ts`,
-`sos/crashMessage.ts`) with Node's built-in test runner — no Expo/React
+`sos/crashMessage.ts`, `pothole/yolo.ts`, `pothole/hazardLogic.ts`,
+`pothole/modelSource.ts`) with Node's built-in test runner — no Expo/React
 Native runtime involved, matching how `vision-ai/`'s Python tests stub out
 hardware-facing imports to test pure logic in isolation. This is a
 *separate* TypeScript config (`tsconfig.test.json`, plain CommonJS) from the
@@ -313,6 +353,10 @@ typecheck` and `npx expo-doctor` are the checks that do run against them.
   this app has its own Supabase client and auth (mirroring `website/`'s),
   point it at `sos_contacts`/`hazard_logs`/`crash_events` from
   `website/supabase_schema.sql`.
+- **Forward Pothole Cam alerts to the helmet visor.** Today they stay on the
+  phone (voice, vibration, log). Showing them on the HUD needs a new
+  phone→helmet BLE characteristic and firmware support, mirroring the
+  Banana Pi's `POTHOLE_ALERT:<dir>:...` UART line.
 - **Audio ducking** for background music specifically (TTS itself is
   usually ducked automatically by the OS).
 - Everything above `npm run typecheck`/`npm test`/`npx expo-doctor` passing
