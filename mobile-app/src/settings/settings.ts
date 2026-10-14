@@ -11,6 +11,8 @@ export interface AppSettings {
   onboardingDone: boolean;
   lastDeviceId: string | null;
   lastDeviceName: string | null;
+  /** Where Pothole Cam downloads its .tflite model from; null = this repo's `pothole-model` release. */
+  potholeModelUrl: string | null;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -21,6 +23,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingDone: false,
   lastDeviceId: null,
   lastDeviceName: null,
+  potholeModelUrl: null,
 };
 
 export function parseSettings(raw: string | null): AppSettings {
@@ -39,6 +42,9 @@ export function parseSettings(raw: string | null): AppSettings {
     if (typeof parsed.onboardingDone === "boolean") out.onboardingDone = parsed.onboardingDone;
     if (typeof parsed.lastDeviceId === "string") out.lastDeviceId = parsed.lastDeviceId;
     if (typeof parsed.lastDeviceName === "string") out.lastDeviceName = parsed.lastDeviceName;
+    if (typeof parsed.potholeModelUrl === "string" && /^https?:\/\/\S+$/i.test(parsed.potholeModelUrl)) {
+      out.potholeModelUrl = parsed.potholeModelUrl;
+    }
     return out;
   } catch {
     return { ...DEFAULT_SETTINGS };

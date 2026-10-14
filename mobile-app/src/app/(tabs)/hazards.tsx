@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Button, EmptyState } from "../../components/ui";
 import { useHistory } from "../../hooks/useHistory";
-import { HAZARD_LABEL, hazardsToCsv, type HazardRecord } from "../../history/records";
+import { hazardLabel, hazardsToCsv, type HazardRecord } from "../../history/records";
 import { HazardEventType } from "../../protocol/hazardProtocol";
 import { mapsUrl } from "../../sos/crashMessage";
 import { colors, radius, spacing } from "../../theme";
@@ -57,7 +57,7 @@ export default function HazardsScreen() {
               Hazards
             </AppText>
             <AppText variant="small" color={colors.textMuted}>
-              Bumps and crashes your helmet's motion sensor detected. Each one is saved with its location.
+              Bumps and crashes your helmet's motion sensor detected, plus potholes Pothole Cam spotted. Each one is saved with its location.
             </AppText>
             <View style={styles.stats}>
               <Stat value={potholes} label="Potholes" color={colors.warning} />
@@ -121,7 +121,7 @@ function HazardRow({ item }: { item: HazardRecord }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${HAZARD_LABEL[item.type]} at ${when.toLocaleString()}`}
+      accessibilityLabel={`${hazardLabel(item)} at ${when.toLocaleString()}`}
       disabled={!item.hasGpsFix}
       onPress={() => void Linking.openURL(mapsUrl(item.lat, item.lon))}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]}
@@ -130,10 +130,10 @@ function HazardRow({ item }: { item: HazardRecord }) {
         <Ionicons name={t.icon} size={22} color={t.color} />
       </View>
       <View style={styles.flex}>
-        <AppText weight="semibold">{HAZARD_LABEL[item.type]}</AppText>
+        <AppText weight="semibold">{hazardLabel(item)}</AppText>
         <AppText variant="small" color={colors.textMuted}>
           {when.toLocaleDateString()} {when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} ·{" "}
-          {item.gForce.toFixed(1)} g
+          {item.source === "camera" ? "seen by phone camera" : `${item.gForce.toFixed(1)} g`}
         </AppText>
         <AppText variant="caption" color={colors.textFaint}>
           {item.hasGpsFix ? `${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}` : "No GPS fix"}

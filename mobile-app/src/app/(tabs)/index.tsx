@@ -9,7 +9,7 @@ import { useHistory } from "../../hooks/useHistory";
 import { useRide } from "../../hooks/useRide";
 import { useSettings } from "../../hooks/useSettings";
 import { loadContacts } from "../../sos/contactsStore";
-import { HAZARD_LABEL } from "../../history/records";
+import { hazardLabel } from "../../history/records";
 import { formatDistance, formatDuration } from "../../nav/geo";
 import { colors, radius, spacing } from "../../theme";
 import { STATUS_META } from "../../components/statusMeta";
@@ -127,6 +127,12 @@ export default function RideHome() {
         variant="secondary"
         onPress={() => router.push("/scan-road")}
       />
+      <Button
+        label="Pothole Cam (on-device AI)"
+        icon="camera"
+        variant="secondary"
+        onPress={() => router.push("/pothole-cam")}
+      />
       {ride.error ? <Banner tone="danger" title="Couldn't start ride" message={ride.error} /> : null}
 
       <SectionTitle>Visor preview</SectionTitle>
@@ -149,7 +155,7 @@ export default function RideHome() {
         <Tile
           icon="warning"
           label="Last hazard"
-          value={lastHazard ? HAZARD_LABEL[lastHazard.type] : "None"}
+          value={lastHazard ? hazardLabel(lastHazard) : "None"}
           sub={lastHazard ? timeAgo(lastHazard.at) : undefined}
           tone={colors.warning}
           onPress={() => router.push("/hazards")}

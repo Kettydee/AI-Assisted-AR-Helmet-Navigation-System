@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hazardRecordFrom, hazardsToCsv, parseList, prepend, rideTotals, type RideRecord } from "./records";
+import { hazardLabel, hazardRecordFrom, hazardsToCsv, parseList, prepend, rideTotals, type RideRecord } from "./records";
 import { HazardEventType } from "../protocol/hazardProtocol";
 
 test("prepend keeps newest first and caps the list", () => {
@@ -13,8 +13,24 @@ test("hazardsToCsv writes a header and one row per record", () => {
     Date.UTC(2026, 0, 2, 3, 4, 5),
   );
   const csv = hazardsToCsv([rec]).split("\n");
-  assert.equal(csv[0], "time_iso,type,g_force,lat,lon,has_gps_fix");
-  assert.equal(csv[1], "2026-01-02T03:04:05.000Z,Pothole / bump,2.46,12.5,77.25,true");
+  assert.equal(csv[0], "time_iso,type,g_force,lat,lon,has_gps_fix,source");
+  assert.equal(csv[1], "2026-01-02T03:04:05.000Z,Pothole / bump,2.46,12.5,77.25,true,helmet");
+});
+
+test("camera pothole records are labelled and exported as camera", () => {
+  const rec = hazardRecordFrom(
+    { type: HazardEventType.POTHOLE_BUMP, gForce: 0, lat: 1, lon: 2, hasGpsFix: true },
+    Date.UTC(2026, 0, 2, 3, 4, 5),
+    "camera",
+  );
+  assert.equal(hazardLabel(rec), "Pothole (camera)");
+  assert.equal(hazardsToCsv([rec]).split("\n")[1], "2026-01-02T03:04:05.000Z,Pothole (camera),0.00,1,2,true,camera");
+});
+
+test("records saved before the source field existed count as helmet", () => {
+  const legacy = { id: "x", at: 0, type: HazardEventType.CRASH_DETECTED, gForce: 4, lat: 0, lon: 0, hasGpsFix: false };
+  assert.equal(hazardLabel(legacy), "Crash detected");
+  assert.match(hazardsToCsv([legacy]).split("\n")[1], /,helmet$/);
 });
 
 test("rideTotals sums rides", () => {

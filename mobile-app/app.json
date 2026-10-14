@@ -8,7 +8,10 @@
     "scheme": "arhelmetnav",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to watch the road for potholes with your camera. Video stays on your phone."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -75,6 +78,21 @@
         "expo-contacts",
         {
           "contactsPermission": "Allow $(PRODUCT_NAME) to pick emergency contacts from your address book."
+        }
+      ],
+      [
+        "react-native-fast-tflite",
+        {
+          "enableAndroidGpuLibraries": true,
+          "enableCoreMLDelegate": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
         }
       ]
     ],

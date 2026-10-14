@@ -31,6 +31,12 @@
     "src/history/**/*.ts",
     "src/update/updateCheck.ts",
     "src/update/updateCheck.test.ts",
-    "src/vision/**/*.ts"
+    "src/vision/**/*.ts",
+    "src/pothole/yolo.ts",
+    "src/pothole/yolo.test.ts",
+    "src/pothole/hazardLogic.ts",
+    "src/pothole/hazardLogic.test.ts",
+    "src/pothole/modelSource.ts",
+    "src/pothole/modelSource.test.ts"
   ]
 }
